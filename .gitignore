@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.DS_Store
+*.log
+account-app-rn/node_modules
+account-app-rn/ios/Pods
+account-app-server/target
+account-app-server/data

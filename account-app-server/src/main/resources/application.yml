@@ -1,0 +1,18 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: account-app-server
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: jdbc:sqlite:./data/account.db
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/init.sql
+
+logging:
+  level:
+    root: info
+    com.example.account: debug

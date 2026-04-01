@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import {
+  AccountType,
   BillFilters,
   BillInput,
   BillRecord,
@@ -50,6 +51,156 @@ function ensureCurrentUserId(currentUserId: number | null): number {
   return currentUserId;
 }
 
+function findCategoryId(
+  data: PersistedAppData,
+  userId: number,
+  type: BillType,
+  name: string,
+): number {
+  const userCategory = data.categories.find(
+    category => category.userId === userId && category.type === type && category.name === name,
+  );
+  if (userCategory) {
+    return userCategory.id;
+  }
+
+  const defaultCategory = data.categories.find(
+    category => category.userId === null && category.type === type && category.name === name,
+  );
+  if (defaultCategory) {
+    return defaultCategory.id;
+  }
+
+  const fallback = data.categories.find(category => category.type === type);
+  return fallback?.id ?? 1;
+}
+
+function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
+  const expenseAmounts = [86, 52, 108, 64, 78, 56, 92];
+  const incomeAmounts = [0, 180, 0, 0, 320, 0, 0];
+  const expenseRemarks = [
+    '午餐和咖啡',
+    '地铁通勤',
+    '家用补货',
+    '晚餐聚会',
+    '周中采购',
+    '交通补票',
+    '周末聚餐',
+  ];
+  const expenseCategoryNames = ['餐饮', '交通', '购物', '娱乐', '住房', '通讯', '餐饮'];
+  const incomeCategoryNames = ['兼职', '奖金', '转账'];
+  const accountTypes: AccountType[] = ['WECHAT', 'ALIPAY', 'BANK_CARD', 'CASH'];
+  const now = nowString();
+  let billId = nextId(data.bills);
+  const demoBills: BillRecord[] = [];
+
+  for (let index = 0; index < 7; index += 1) {
+    const day = dayjs().subtract(6 - index, 'day');
+    const expenseAmount = expenseAmounts[index];
+    demoBills.push({
+      id: billId,
+      userId,
+      type: 'EXPENSE',
+      amount: expenseAmount,
+      categoryId: findCategoryId(
+        data,
+        userId,
+        'EXPENSE',
+        expenseCategoryNames[index % expenseCategoryNames.length],
+      ),
+      accountType: accountTypes[index % accountTypes.length],
+      billTime: day.hour(12).minute(18).second(0).format('YYYY-MM-DD HH:mm:ss'),
+      remark: expenseRemarks[index],
+      deleted: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    billId += 1;
+
+    if (incomeAmounts[index] > 0) {
+      demoBills.push({
+        id: billId,
+        userId,
+        type: 'INCOME',
+        amount: incomeAmounts[index],
+        categoryId: findCategoryId(
+          data,
+          userId,
+          'INCOME',
+          incomeCategoryNames[index % incomeCategoryNames.length],
+        ),
+        accountType: accountTypes[(index + 1) % accountTypes.length],
+        billTime: day.hour(20).minute(15).second(0).format('YYYY-MM-DD HH:mm:ss'),
+        remark: index === 1 ? '夜间接单' : '临时奖金',
+        deleted: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+      billId += 1;
+    }
+  }
+
+  const salaryDate =
+    dayjs().date() > 3
+      ? dayjs().startOf('month').add(2, 'day').hour(10).minute(30).second(0)
+      : dayjs().subtract(2, 'day').hour(10).minute(30).second(0);
+  demoBills.push({
+    id: billId,
+    userId,
+    type: 'INCOME',
+    amount: 6800,
+    categoryId: findCategoryId(data, userId, 'INCOME', '工资'),
+    accountType: 'BANK_CARD',
+    billTime: salaryDate.format('YYYY-MM-DD HH:mm:ss'),
+    remark: '本月工资',
+    deleted: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return demoBills;
+}
+
+export function ensureUserDemoData(
+  data: PersistedAppData,
+  currentUserId: number | null,
+): PersistedAppData {
+  if (!currentUserId) {
+    return data;
+  }
+
+  const hasAnyBill = data.bills.some(bill => bill.userId === currentUserId && !bill.deleted);
+  if (hasAnyBill) {
+    return data;
+  }
+
+  const now = nowString();
+  const month = dayjs().format('YYYY-MM');
+  const demoBills = buildDemoBills(data, currentUserId);
+  const hasBudget = data.budgets.some(
+    budget => budget.userId === currentUserId && budget.month === month,
+  );
+  const nextBudgets = hasBudget
+    ? data.budgets
+    : [
+        ...data.budgets,
+        {
+          id: nextId(data.budgets),
+          userId: currentUserId,
+          month,
+          amount: 4200,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ];
+
+  return {
+    ...data,
+    bills: [...demoBills, ...data.bills],
+    budgets: nextBudgets,
+  };
+}
+
 export function registerUser(data: PersistedAppData, payload: RegisterPayload): PersistedAppData {
   const duplicated = data.users.find(user => user.username === payload.username.trim());
   if (duplicated) {
@@ -67,12 +218,15 @@ export function registerUser(data: PersistedAppData, payload: RegisterPayload): 
     updatedAt: now,
   };
 
-  return {
-    ...data,
-    users: [...data.users, user],
-    currentUserId: user.id,
-    token: `local-token-${user.id}-${Date.now()}`,
-  };
+  return ensureUserDemoData(
+    {
+      ...data,
+      users: [...data.users, user],
+      currentUserId: user.id,
+      token: `local-token-${user.id}-${Date.now()}`,
+    },
+    user.id,
+  );
 }
 
 export function loginUser(data: PersistedAppData, username: string, password: string): PersistedAppData {
@@ -84,11 +238,14 @@ export function loginUser(data: PersistedAppData, username: string, password: st
     throw new Error('用户名或密码错误');
   }
 
-  return {
-    ...data,
-    currentUserId: user.id,
-    token: `local-token-${user.id}-${Date.now()}`,
-  };
+  return ensureUserDemoData(
+    {
+      ...data,
+      currentUserId: user.id,
+      token: `local-token-${user.id}-${Date.now()}`,
+    },
+    user.id,
+  );
 }
 
 export function updateNickname(

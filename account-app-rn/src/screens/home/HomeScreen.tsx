@@ -3,6 +3,7 @@ import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, FAB, ProgressBar, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {colors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
@@ -11,6 +12,7 @@ import EmptyState from '@/components/common/EmptyState';
 
 export default function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const month = dayjs().format('YYYY-MM');
   const users = useAppStore(state => state.users);
   const storeBills = useAppStore(state => state.bills);
@@ -82,7 +84,13 @@ export default function HomeScreen(): React.JSX.Element {
 
   return (
     <View style={{flex: 1}}>
-      <ScrollView contentContainerStyle={{padding: 20, gap: 18}}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingBottom: 20,
+          paddingTop: insets.top + 12,
+          gap: 18,
+        }}>
         <View style={{gap: 4}}>
           <Text variant="headlineMedium" style={{fontWeight: '800'}}>
             早上好，{user?.nickname ?? '你'}

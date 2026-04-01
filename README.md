@@ -9,6 +9,8 @@
 
 ### 前端（React Native，iOS 模拟器）
 
+真机运行说明见：[iPhone 真机运行说明](./zhenjiREADME.md)
+
 终端 1：
 
 ```bash

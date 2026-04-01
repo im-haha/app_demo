@@ -18,6 +18,7 @@ import {
   createInitialAppData,
   deleteBill,
   deleteCategory,
+  ensureUserDemoData,
   getBudgetSummary,
   getCategoryStats,
   getOverviewStats,
@@ -163,7 +164,10 @@ export const useAppStore = create<AppState>()(
         budgets: state.budgets,
       }),
       onRehydrateStorage: () => () => {
-        useAppStore.setState({hydrated: true});
+        useAppStore.setState(current => ({
+          ...ensureUserDemoData(current, current.currentUserId),
+          hydrated: true,
+        }));
       },
     },
   ),

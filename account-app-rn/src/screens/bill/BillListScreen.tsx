@@ -3,6 +3,7 @@ import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import dayjs from 'dayjs';
 import {Chip, FAB, Searchbar, Text} from 'react-native-paper';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
@@ -11,6 +12,7 @@ import {filterTypeOptions} from '@/utils/constants';
 
 export default function BillListScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [keyword, setKeyword] = useState('');
   const [type, setType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
   const storeBills = useAppStore(state => state.bills);
@@ -32,7 +34,13 @@ export default function BillListScreen(): React.JSX.Element {
 
   return (
     <View style={{flex: 1}}>
-      <ScrollView contentContainerStyle={{padding: 20, gap: 16}}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingBottom: 20,
+          paddingTop: insets.top + 12,
+          gap: 16,
+        }}>
         <View style={{gap: 8}}>
           <Text variant="headlineSmall" style={{fontWeight: '800'}}>
             全部账单

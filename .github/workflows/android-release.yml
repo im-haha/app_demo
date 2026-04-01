@@ -29,6 +29,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Resolve release metadata
         id: meta
@@ -93,7 +96,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           missing=0
-          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS; do
             if [[ -z "${!var}" ]]; then
               echo "::error::缺少仓库 Secret: ${var}"
               missing=1
@@ -105,11 +108,50 @@ jobs:
           fi
 
           echo "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > app/release.keystore
+
+          CANDIDATE_KEY_PASSWORDS=()
+          if [[ -n "${ANDROID_KEY_PASSWORD}" ]]; then
+            CANDIDATE_KEY_PASSWORDS+=("${ANDROID_KEY_PASSWORD}")
+          fi
+          if [[ "${ANDROID_KEYSTORE_PASSWORD}" != "${ANDROID_KEY_PASSWORD}" ]]; then
+            CANDIDATE_KEY_PASSWORDS+=("${ANDROID_KEYSTORE_PASSWORD}")
+          fi
+
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "${TMP_DIR}"' EXIT
+          echo "keystore-check" > "${TMP_DIR}/check.txt"
+          (
+            cd "${TMP_DIR}"
+            jar --create --file check.jar check.txt > /dev/null
+          )
+
+          RESOLVED_KEY_PASSWORD=""
+          for candidate in "${CANDIDATE_KEY_PASSWORDS[@]}"; do
+            if jarsigner \
+              -keystore app/release.keystore \
+              -storepass "${ANDROID_KEYSTORE_PASSWORD}" \
+              -keypass "${candidate}" \
+              "${TMP_DIR}/check.jar" \
+              "${ANDROID_KEY_ALIAS}" > /dev/null 2>&1; then
+              RESOLVED_KEY_PASSWORD="${candidate}"
+              break
+            fi
+          done
+
+          if [[ -z "${RESOLVED_KEY_PASSWORD}" ]]; then
+            echo "::error::签名校验失败：无法读取 alias=${ANDROID_KEY_ALIAS} 的私钥。请检查 ANDROID_KEY_PASSWORD，若为 PKCS12 且未单独设置 key 密码，通常应与 ANDROID_KEYSTORE_PASSWORD 一致。"
+            exit 1
+          fi
+
+          if [[ -n "${ANDROID_KEY_PASSWORD}" && "${RESOLVED_KEY_PASSWORD}" != "${ANDROID_KEY_PASSWORD}" ]]; then
+            echo "::warning::ANDROID_KEY_PASSWORD 校验失败，已回退使用 ANDROID_KEYSTORE_PASSWORD。建议修正仓库 Secret，避免后续混淆。"
+          fi
+
           {
             echo "storeFile=app/release.keystore"
             echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
             echo "keyAlias=${ANDROID_KEY_ALIAS}"
-            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyPassword=${RESOLVED_KEY_PASSWORD}"
           } > keystore.properties
 
       - name: Build release APK
@@ -140,6 +182,143 @@ jobs:
           path: ${{ steps.artifact.outputs.path }}
           if-no-files-found: error
 
+      - name: Generate structured release notes
+        if: steps.meta.outputs.has_notes != 'true'
+        id: notes
+        env:
+          RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          RELEASE_NAME: ${{ steps.meta.outputs.name }}
+        run: |
+          set -eo pipefail
+
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          PREV_TAG="$(git tag --list 'v*' --sort=-creatordate | grep -Fxv "${RELEASE_TAG}" | head -n 1 || true)"
+          declare -a COMMITS=()
+
+          if [[ -n "${PREV_TAG}" ]]; then
+            while IFS= read -r line; do
+              COMMITS+=("${line}")
+            done < <(git log --pretty=format:'%s' "${PREV_TAG}..${GITHUB_SHA}")
+            COMPARE_URL="https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${RELEASE_TAG}"
+          else
+            while IFS= read -r line; do
+              COMMITS+=("${line}")
+            done < <(git log --pretty=format:'%s' --max-count=200)
+            COMPARE_URL=""
+          fi
+
+          TOTAL="${#COMMITS[@]}"
+          if [[ "${TOTAL}" -eq 0 ]]; then
+            while IFS= read -r line; do
+              COMMITS+=("${line}")
+            done < <(git log --pretty=format:'%s' -n 1 "${GITHUB_SHA}")
+            TOTAL="${#COMMITS[@]}"
+          fi
+          declare -a ADDED=()
+          declare -a FIXED=()
+          declare -a IMPROVED=()
+          declare -a OTHER=()
+
+          for msg in "${COMMITS[@]}"; do
+            if [[ -z "${msg}" ]]; then
+              continue
+            fi
+
+            clean="${msg}"
+            if [[ "${msg}" == *": "* ]]; then
+              clean="${msg#*: }"
+            fi
+            clean="${clean#"${clean%%[![:space:]]*}"}"
+
+            lower="$(printf '%s' "${msg}" | tr '[:upper:]' '[:lower:]')"
+
+            if [[ "${lower}" == feat:* ]] || [[ "${lower}" == feat\(*\):* ]] || [[ "${lower}" == feature:* ]] || [[ "${lower}" == feature\(*\):* ]] || [[ "${msg}" == *新增* ]] || [[ "${msg}" == *添加* ]] || [[ "${msg}" == *支持* ]] || [[ "${msg}" == *接入* ]]; then
+              ADDED+=("${clean}")
+            elif [[ "${lower}" == fix:* ]] || [[ "${lower}" == fix\(*\):* ]] || [[ "${lower}" == hotfix:* ]] || [[ "${lower}" == hotfix\(*\):* ]] || [[ "${lower}" == *bug* ]] || [[ "${msg}" == *修复* ]] || [[ "${msg}" == *崩溃* ]] || [[ "${msg}" == *异常* ]] || [[ "${msg}" == *失败* ]]; then
+              FIXED+=("${clean}")
+            elif [[ "${lower}" == perf:* ]] || [[ "${lower}" == perf\(*\):* ]] || [[ "${lower}" == refactor:* ]] || [[ "${lower}" == refactor\(*\):* ]] || [[ "${lower}" == optimize:* ]] || [[ "${lower}" == optimize\(*\):* ]] || [[ "${lower}" == style:* ]] || [[ "${lower}" == style\(*\):* ]] || [[ "${lower}" == chore:* ]] || [[ "${lower}" == chore\(*\):* ]] || [[ "${msg}" == *优化* ]] || [[ "${msg}" == *重构* ]] || [[ "${msg}" == *改进* ]] || [[ "${msg}" == *性能* ]] || [[ "${msg}" == *体验* ]]; then
+              IMPROVED+=("${clean}")
+            else
+              OTHER+=("${clean}")
+            fi
+          done
+
+          {
+            echo "# ${RELEASE_NAME}"
+            echo
+            echo "## 重要说明"
+            if [[ -n "${PREV_TAG}" ]]; then
+              echo "- 本次版本从 \`${PREV_TAG}\` 升级到 \`${RELEASE_TAG}\`。"
+              echo "- 共包含 ${TOTAL} 条提交，建议尽快升级。"
+              echo "- [查看完整提交差异](${COMPARE_URL})"
+            else
+              echo "- 这是当前仓库的首个自动结构化发布说明。"
+              echo "- 建议安装前先备份本地数据。"
+            fi
+            echo
+
+            echo "## 新增功能"
+            if [[ "${#ADDED[@]}" -eq 0 ]]; then
+              echo "- 无"
+            else
+              for item in "${ADDED[@]}"; do
+                echo "- ${item}"
+              done
+            fi
+            echo
+
+            echo "## 修复问题"
+            if [[ "${#FIXED[@]}" -eq 0 ]]; then
+              echo "- 无"
+            else
+              for item in "${FIXED[@]}"; do
+                echo "- ${item}"
+              done
+            fi
+            echo
+
+            echo "## 优化改进"
+            if [[ "${#IMPROVED[@]}" -eq 0 ]]; then
+              echo "- 无"
+            else
+              for item in "${IMPROVED[@]}"; do
+                echo "- ${item}"
+              done
+            fi
+            echo
+
+            echo "## 其他变更"
+            if [[ "${#OTHER[@]}" -eq 0 ]]; then
+              echo "- 无"
+            else
+              for item in "${OTHER[@]}"; do
+                echo "- ${item}"
+              done
+            fi
+            echo
+
+            echo "## 下载地址"
+            echo
+            echo "### Android"
+            echo "- 通用 APK（推荐）: [accountapp-${RELEASE_TAG}-android.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-android.apk)"
+            echo "- 备用入口: [Release 页面](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG})"
+            echo
+            echo "### Windows"
+            echo "- 当前版本未提供 Windows 安装包。"
+            echo
+            echo "### macOS"
+            echo "- 当前版本未提供 macOS 安装包。"
+            echo
+            echo "### Linux"
+            echo "- 当前版本未提供 Linux 安装包。"
+            echo
+            echo "### 安装提示"
+            echo "- 首次安装时若系统提示风险，请确认来源后继续安装。"
+            echo "- 建议升级前先备份关键数据。"
+          } > "${NOTES_FILE}"
+
+          echo "body_path=${NOTES_FILE}" >> "${GITHUB_OUTPUT}"
+
       - name: Publish release with custom notes
         if: steps.meta.outputs.has_notes == 'true'
         uses: softprops/action-gh-release@v2
@@ -150,14 +329,14 @@ jobs:
           body: ${{ steps.meta.outputs.notes }}
           files: ${{ steps.artifact.outputs.path }}
 
-      - name: Publish release with auto notes
+      - name: Publish release with generated notes
         if: steps.meta.outputs.has_notes != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
           name: ${{ steps.meta.outputs.name }}
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.body_path }}
           files: ${{ steps.artifact.outputs.path }}
 
       - name: Cleanup signing files

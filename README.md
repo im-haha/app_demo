@@ -126,7 +126,7 @@ base64 release.keystore | tr -d '\n'
 - `ANDROID_KEYSTORE_BASE64`：上一步 Base64 内容
 - `ANDROID_KEYSTORE_PASSWORD`：keystore 密码
 - `ANDROID_KEY_ALIAS`：别名（例如 `accountapp`）
-- `ANDROID_KEY_PASSWORD`：key 密码
+- `ANDROID_KEY_PASSWORD`：key 密码（可选；若未单独设置，通常与 `ANDROID_KEYSTORE_PASSWORD` 相同）
 
 本地签名模板参考：
 
@@ -152,6 +152,35 @@ git push origin v1.0.1
 ### 4. 下载与安装
 
 工作流成功后，会自动创建/更新对应的 GitHub Release，并上传 APK 资产（文件名类似 `accountapp-v1.0.1-android.apk`），安卓手机可直接在 Release 页面下载安装。
+
+### 5. 结构化 Release 说明（新增/修复/优化）
+
+当前工作流默认会生成结构化发布说明，包含：
+
+- 重要说明
+- 新增功能
+- 修复问题
+- 优化改进
+- 其他变更
+- 下载地址（按 Android / Windows / macOS / Linux 分区展示）
+
+说明归类来源于提交信息（commit message），建议发版前使用如下前缀提交：
+
+- `feat:` 归类到“新增功能”
+- `fix:` 归类到“修复问题”
+- `perf:` / `refactor:` / `optimize:` / `chore:` 归类到“优化改进”
+
+如果你手动触发工作流并填写 `release_notes`，则会优先使用你手填的内容。
+
+### 常见报错排查
+
+如果出现：
+
+```text
+Given final block not properly padded
+```
+
+通常是 `ANDROID_KEY_PASSWORD` 与 keystore 中私钥密码不一致。当前工作流会先做私钥校验，并在 `ANDROID_KEY_PASSWORD` 不可用时自动回退使用 `ANDROID_KEYSTORE_PASSWORD`；但建议仍修正 Secret，避免后续混淆。
 
 ## 已修复的兼容性问题
 

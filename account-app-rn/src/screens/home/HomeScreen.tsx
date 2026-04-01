@@ -1,7 +1,7 @@
 import React, {useMemo} from 'react';
 import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Card, FAB, ProgressBar, Text} from 'react-native-paper';
+import {Card, ProgressBar, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
@@ -10,6 +10,7 @@ import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
+import DraggableFab from '@/components/common/DraggableFab';
 
 export default function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
@@ -114,23 +115,28 @@ export default function HomeScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
       <View style={{flex: 1}}>
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 10,
+            gap: 4,
+          }}>
+          <Text variant="headlineMedium" style={{fontWeight: '800'}}>
+            早上好，{user?.nickname ?? '你'}
+          </Text>
+          <Text variant="bodyMedium" style={{color: colors.muted}}>
+            今天先把现金流看清楚。
+          </Text>
+        </View>
         <ScrollView
           bounces={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: listBottomPadding,
-            paddingTop: 12,
+            paddingTop: 8,
             gap: 18,
           }}>
-          <View style={{gap: 4}}>
-            <Text variant="headlineMedium" style={{fontWeight: '800'}}>
-              早上好，{user?.nickname ?? '你'}
-            </Text>
-            <Text variant="bodyMedium" style={{color: colors.muted}}>
-              今天先把现金流看清楚。
-            </Text>
-          </View>
-
           <Card
             mode="contained"
             style={{backgroundColor: colors.primary, borderRadius: 28}}>
@@ -272,17 +278,12 @@ export default function HomeScreen(): React.JSX.Element {
             )}
           </View>
         </ScrollView>
-        <FAB
-          icon={({size, color}) => <PlusLineIcon size={size} color={color} />}
-          style={{
-            position: 'absolute',
-            right: 20,
-            bottom: fabBottom,
-            backgroundColor: colors.secondary,
-          }}
-          color="#FFFFFF"
-          onPress={() => navigation.navigate('BillAdd')}
-        />
+        <DraggableFab
+          bottomOffset={fabBottom}
+          backgroundColor={colors.secondary}
+          onPress={() => navigation.navigate('BillAdd')}>
+          <PlusLineIcon />
+        </DraggableFab>
       </View>
     </SafeAreaView>
   );

@@ -157,141 +157,149 @@ export default function StatsScreen(): React.JSX.Element {
 
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
-      <ScrollView
-        bounces={false}
-        contentContainerStyle={{
-          paddingHorizontal: 20,
-          paddingBottom: 20,
-          paddingTop: 12,
-          gap: 16,
-        }}>
-        <View style={{gap: 4}}>
-          <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-            统计分析
-          </Text>
-          <Text variant="bodyMedium" style={{color: colors.muted}}>
-            用当前数据看消费结构和趋势。
-          </Text>
-        </View>
-
+      <View style={{flex: 1}}>
         <View
-          onLayout={event => setSwitchWidth(event.nativeEvent.layout.width)}
           style={{
-            height: 56,
-            backgroundColor: colors.surface,
-            borderRadius: 28,
-            padding: 2,
-            borderWidth: 1,
-            borderColor: colors.border,
-            flexDirection: 'row',
-            overflow: 'hidden',
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 10,
+            gap: 16,
+          }}>
+          <View style={{gap: 4}}>
+            <Text variant="headlineSmall" style={{fontWeight: '800'}}>
+              统计分析
+            </Text>
+            <Text variant="bodyMedium" style={{color: colors.muted}}>
+              用当前数据看消费结构和趋势。
+            </Text>
+          </View>
+
+          <View
+            onLayout={event => setSwitchWidth(event.nativeEvent.layout.width)}
+            style={{
+              height: 56,
+              backgroundColor: colors.surface,
+              borderRadius: 28,
+              padding: 2,
+              borderWidth: 1,
+              borderColor: colors.border,
+              flexDirection: 'row',
+              overflow: 'hidden',
+            }}>
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: 0,
+                height: 52,
+                width: indicatorWidth,
+                borderRadius: 26,
+                backgroundColor: '#E3E9E8',
+                transform: [{translateX: indicatorTranslateX}],
+              }}
+            />
+            <Pressable
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1,
+              }}
+              onPress={() => handleTypeChange('EXPENSE')}>
+              <Text
+                variant="titleMedium"
+                style={{
+                  fontWeight: '700',
+                  color: type === 'EXPENSE' ? colors.text : colors.muted,
+                }}>
+                支出
+              </Text>
+            </Pressable>
+            <Pressable
+              style={{
+                flex: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1,
+              }}
+              onPress={() => handleTypeChange('INCOME')}>
+              <Text
+                variant="titleMedium"
+                style={{
+                  fontWeight: '700',
+                  color: type === 'INCOME' ? colors.text : colors.muted,
+                }}>
+                收入
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{flexDirection: 'row', gap: 12}}>
+            <Chip
+              selected={rangeDays === 7}
+              showSelectedCheck={false}
+              onPress={() => handleRangeChange(7)}>
+              最近 7 天
+            </Chip>
+            <Chip
+              selected={rangeDays === 30}
+              showSelectedCheck={false}
+              onPress={() => handleRangeChange(30)}>
+              最近 30 天
+            </Chip>
+          </View>
+        </View>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: 20,
+            paddingTop: 8,
           }}>
           <Animated.View
             style={{
-              position: 'absolute',
-              top: 2,
-              left: 0,
-              height: 52,
-              width: indicatorWidth,
-              borderRadius: 26,
-              backgroundColor: '#E3E9E8',
-              transform: [{translateX: indicatorTranslateX}],
-            }}
-          />
-          <Pressable
-            style={{
-              flex: 1,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 1,
-            }}
-            onPress={() => handleTypeChange('EXPENSE')}>
-            <Text
-              variant="titleMedium"
-              style={{
-                fontWeight: '700',
-                color: type === 'EXPENSE' ? colors.text : colors.muted,
-              }}>
-              支出
-            </Text>
-          </Pressable>
-          <Pressable
-            style={{
-              flex: 1,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 1,
-            }}
-            onPress={() => handleTypeChange('INCOME')}>
-            <Text
-              variant="titleMedium"
-              style={{
-                fontWeight: '700',
-                color: type === 'INCOME' ? colors.text : colors.muted,
-              }}>
-              收入
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={{flexDirection: 'row', gap: 12}}>
-          <Chip
-            selected={rangeDays === 7}
-            showSelectedCheck={false}
-            onPress={() => handleRangeChange(7)}>
-            最近 7 天
-          </Chip>
-          <Chip
-            selected={rangeDays === 30}
-            showSelectedCheck={false}
-            onPress={() => handleRangeChange(30)}>
-            最近 30 天
-          </Chip>
-        </View>
-
-        <Animated.View
-          style={{
-            gap: 16,
-            opacity: contentOpacity,
-            transform: [{translateY: contentTranslateY}],
-          }}>
-          <View style={{flexDirection: 'row', gap: 12}}>
-            <View
-              style={{
-                flex: 1,
-                borderRadius: 24,
-                backgroundColor: colors.surface,
-                padding: 16,
-                gap: 6,
-              }}>
-              <Text style={{color: colors.muted}}>本月收入</Text>
-              <Text
-                variant="titleLarge"
-                style={{color: colors.income, fontWeight: '800'}}>
-                ¥{overview.monthIncome.toFixed(2)}
-              </Text>
+              gap: 16,
+              opacity: contentOpacity,
+              transform: [{translateY: contentTranslateY}],
+            }}>
+            <View style={{flexDirection: 'row', gap: 12}}>
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 24,
+                  backgroundColor: colors.surface,
+                  padding: 16,
+                  gap: 6,
+                }}>
+                <Text style={{color: colors.muted}}>本月收入</Text>
+                <Text
+                  variant="titleLarge"
+                  style={{color: colors.income, fontWeight: '800'}}>
+                  ¥{overview.monthIncome.toFixed(2)}
+                </Text>
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 24,
+                  backgroundColor: colors.surface,
+                  padding: 16,
+                  gap: 6,
+                }}>
+                <Text style={{color: colors.muted}}>本月支出</Text>
+                <Text
+                  variant="titleLarge"
+                  style={{color: colors.expense, fontWeight: '800'}}>
+                  ¥{overview.monthExpense.toFixed(2)}
+                </Text>
+              </View>
             </View>
-            <View
-              style={{
-                flex: 1,
-                borderRadius: 24,
-                backgroundColor: colors.surface,
-                padding: 16,
-                gap: 6,
-              }}>
-              <Text style={{color: colors.muted}}>本月支出</Text>
-              <Text
-                variant="titleLarge"
-                style={{color: colors.expense, fontWeight: '800'}}>
-                ¥{overview.monthExpense.toFixed(2)}
-              </Text>
-            </View>
-          </View>
 
-          <PieChartCard title={`${month} 分类占比`} data={categoryStats} />
-          <TrendChartCard title={`${rangeDays} 天趋势`} data={trendStats} />
-        </Animated.View>
-      </ScrollView>
+            <PieChartCard title={`${month} 分类占比`} data={categoryStats} />
+            <TrendChartCard title={`${rangeDays} 天趋势`} data={trendStats} />
+          </Animated.View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

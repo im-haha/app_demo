@@ -2,7 +2,7 @@ import React, {useMemo, useState} from 'react';
 import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import dayjs from 'dayjs';
-import {Chip, FAB, Searchbar, Text} from 'react-native-paper';
+import {Chip, Searchbar, Text} from 'react-native-paper';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import BillCard from '@/components/bill/BillCard';
@@ -11,6 +11,7 @@ import {colors} from '@/theme';
 import {filterTypeOptions} from '@/utils/constants';
 import SearchLineIcon from '@/components/common/icons/SearchLineIcon';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
+import DraggableFab from '@/components/common/DraggableFab';
 
 export default function BillListScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
@@ -42,13 +43,12 @@ export default function BillListScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
       <View style={{flex: 1}}>
-        <ScrollView
-          bounces={false}
-          contentContainerStyle={{
+        <View
+          style={{
             paddingHorizontal: 20,
-            paddingBottom: listBottomPadding,
             paddingTop: 12,
-            gap: 16,
+            paddingBottom: 10,
+            gap: 12,
           }}>
           <View style={{gap: 8}}>
             <Text variant="headlineSmall" style={{fontWeight: '800'}}>
@@ -77,6 +77,15 @@ export default function BillListScreen(): React.JSX.Element {
               ))}
             </View>
           </ScrollView>
+        </View>
+        <ScrollView
+          bounces={false}
+          contentContainerStyle={{
+            paddingHorizontal: 20,
+            paddingBottom: listBottomPadding,
+            paddingTop: 8,
+            gap: 12,
+          }}>
           {bills.length === 0 ? (
             <EmptyState
               title="还没有账单"
@@ -96,17 +105,12 @@ export default function BillListScreen(): React.JSX.Element {
             ))
           )}
         </ScrollView>
-        <FAB
-          icon={({size, color}) => <PlusLineIcon size={size} color={color} />}
-          style={{
-            position: 'absolute',
-            right: 20,
-            bottom: fabBottom,
-            backgroundColor: colors.secondary,
-          }}
-          color="#FFFFFF"
-          onPress={() => navigation.navigate('BillAdd')}
-        />
+        <DraggableFab
+          bottomOffset={fabBottom}
+          backgroundColor={colors.secondary}
+          onPress={() => navigation.navigate('BillAdd')}>
+          <PlusLineIcon />
+        </DraggableFab>
       </View>
     </SafeAreaView>
   );

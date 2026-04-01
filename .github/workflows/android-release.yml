@@ -85,7 +85,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: account-app-rn
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --progress=false
 
       - name: Prepare Android signing files
         working-directory: account-app-rn/android
@@ -158,7 +158,10 @@ jobs:
         working-directory: account-app-rn/android
         run: |
           chmod +x ./gradlew
-          ./gradlew clean assembleRelease
+          ./gradlew assembleRelease \
+            --parallel \
+            --build-cache \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 
       - name: Rename APK artifact
         id: artifact

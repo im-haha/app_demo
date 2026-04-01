@@ -5,7 +5,7 @@ import {Button, Card, Text} from 'react-native-paper';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {formatCurrency, formatDateLabel} from '@/utils/format';
 import {deleteBill} from '@/api/bill';
 import {accountTypeOptions} from '@/utils/constants';
@@ -17,6 +17,7 @@ export default function BillDetailScreen({
   navigation,
   route,
 }: Props): React.JSX.Element {
+  const colors = useThemeColors();
   const bills = useAppStore(state => state.bills);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);

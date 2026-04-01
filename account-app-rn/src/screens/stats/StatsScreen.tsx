@@ -6,10 +6,11 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import PieChartCard from '@/components/stats/PieChartCard';
 import TrendChartCard from '@/components/stats/TrendChartCard';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 
 export default function StatsScreen(): React.JSX.Element {
+  const colors = useThemeColors();
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
   const [switchWidth, setSwitchWidth] = useState(0);
@@ -156,7 +157,7 @@ export default function StatsScreen(): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView style={{flex: 1}} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <View style={{flex: 1}}>
         <View
           style={{
@@ -296,7 +297,12 @@ export default function StatsScreen(): React.JSX.Element {
             </View>
 
             <PieChartCard title={`${month} 分类占比`} data={categoryStats} />
-            <TrendChartCard title={`${rangeDays} 天趋势`} data={trendStats} />
+            <TrendChartCard
+              title={`${rangeDays} 天趋势`}
+              data={trendStats}
+              type={type}
+              rangeDays={rangeDays}
+            />
           </Animated.View>
         </ScrollView>
       </View>

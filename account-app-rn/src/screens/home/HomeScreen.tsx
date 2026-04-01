@@ -5,7 +5,7 @@ import {Card, ProgressBar, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
@@ -13,6 +13,7 @@ import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
 
 export default function HomeScreen(): React.JSX.Element {
+  const colors = useThemeColors();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
@@ -113,7 +114,7 @@ export default function HomeScreen(): React.JSX.Element {
   );
 
   return (
-    <SafeAreaView style={{flex: 1}} edges={['top']}>
+    <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <View style={{flex: 1}}>
         <View
           style={{

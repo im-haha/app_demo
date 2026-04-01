@@ -15,7 +15,7 @@ import BillListScreen from '@/screens/bill/BillListScreen';
 import StatsScreen from '@/screens/stats/StatsScreen';
 import MineScreen from '@/screens/mine/MineScreen';
 import {MainTabParamList} from './types';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {tabSwitchHaptic} from '@/utils/haptics';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -100,10 +100,12 @@ function TabIcon({
   routeName,
   color,
   focused,
+  haloColor,
 }: {
   routeName: keyof MainTabParamList;
   color: string;
   focused: boolean;
+  haloColor: string;
 }): React.JSX.Element {
   const focusAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
@@ -170,6 +172,7 @@ function TabIcon({
         style={[
           styles.activeHalo,
           {
+            backgroundColor: haloColor,
             opacity: focusAnim,
             transform: [{scale: bubbleScale}],
           },
@@ -183,6 +186,8 @@ function TabIcon({
 }
 
 export default function MainTabNavigator(): React.JSX.Element {
+  const colors = useThemeColors();
+
   return (
     <Tab.Navigator
       screenOptions={({route}) => ({
@@ -204,7 +209,12 @@ export default function MainTabNavigator(): React.JSX.Element {
           marginTop: 1,
         },
         tabBarIcon: ({color, focused}) => (
-          <TabIcon routeName={route.name} color={color} focused={focused} />
+          <TabIcon
+            routeName={route.name}
+            color={color}
+            focused={focused}
+            haloColor={colors.tabActiveHalo}
+          />
         ),
       })}>
       <Tab.Screen name="Home" component={HomeScreen} options={{title: '首页'}} />
@@ -223,7 +233,6 @@ const styles = StyleSheet.create({
     right: -8,
     bottom: -2,
     borderRadius: 14,
-    backgroundColor: '#E8EFEE',
   },
   iconBox: {
     width: 24,

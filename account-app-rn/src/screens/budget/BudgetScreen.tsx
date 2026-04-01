@@ -6,10 +6,11 @@ import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {saveBudget} from '@/api/budget';
 import {useAppStore} from '@/store/appStore';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 
 export default function BudgetScreen(): React.JSX.Element {
+  const colors = useThemeColors();
   const month = dayjs().format('YYYY-MM');
   const budgets = useAppStore(state => state.budgets);
   const bills = useAppStore(state => state.bills);

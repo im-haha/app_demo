@@ -14,12 +14,13 @@ import AppInput from '@/components/common/AppInput';
 import EmptyState from '@/components/common/EmptyState';
 import {useAppStore} from '@/store/appStore';
 import {createCategory, deleteCategory, updateCategory} from '@/api/category';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 
 const iconOptions = ['food-fork-drink', 'shopping', 'car', 'cash', 'gift', 'shape'];
 const colorOptions = ['#D97757', '#1D7874', '#5C7AEA', '#D64D7F', '#2A9D8F', '#6C757D'];
 
 export default function CategoryManageScreen(): React.JSX.Element {
+  const colors = useThemeColors();
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [visible, setVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

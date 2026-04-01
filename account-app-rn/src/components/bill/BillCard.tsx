@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, View} from 'react-native';
 import {Card, Text} from 'react-native-paper';
 import {BillRecord, Category} from '@/types/bill';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {formatCurrency, formatDateTime} from '@/utils/format';
 import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 
@@ -17,6 +17,7 @@ export default function BillCard({
   category,
   onPress,
 }: Props): React.JSX.Element {
+  const colors = useThemeColors();
   const amountColor = bill.type === 'INCOME' ? colors.income : colors.expense;
 
   return (

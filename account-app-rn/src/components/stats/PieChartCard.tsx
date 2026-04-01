@@ -2,7 +2,7 @@ import React from 'react';
 import {View} from 'react-native';
 import {Card, ProgressBar, Text} from 'react-native-paper';
 import {CategoryStat} from '@/types/bill';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
 }
 
 export default function PieChartCard({title, data}: Props): React.JSX.Element {
+  const colors = useThemeColors();
+
   return (
     <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 24}}>
       <Card.Content style={{gap: 14}}>

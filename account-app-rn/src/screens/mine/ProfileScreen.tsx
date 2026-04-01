@@ -5,9 +5,10 @@ import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {updateProfile} from '@/api/auth';
 import {useAppStore} from '@/store/appStore';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 
 export default function ProfileScreen(): React.JSX.Element {
+  const colors = useThemeColors();
   const users = useAppStore(state => state.users);
   const currentUserId = useAppStore(state => state.currentUserId);
   const user = useMemo(() => users.find(item => item.id === currentUserId), [users, currentUserId]);

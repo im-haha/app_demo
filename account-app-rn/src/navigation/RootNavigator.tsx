@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {View} from 'react-native';
@@ -13,12 +13,12 @@ import CategoryManageScreen from '@/screens/category/CategoryManageScreen';
 import ProfileScreen from '@/screens/mine/ProfileScreen';
 import {RootStackParamList} from './types';
 import {useAppStore} from '@/store/appStore';
+import {buildNavigationTheme, useResolvedThemeMode, useThemeColors} from '@/theme';
 import {APP_NAME} from '@/utils/constants';
-import {colors} from '@/theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function SplashFallback(): React.JSX.Element {
+function SplashFallback({colors}: {colors: ReturnType<typeof useThemeColors>}): React.JSX.Element {
   return (
     <View
       style={{
@@ -35,15 +35,21 @@ function SplashFallback(): React.JSX.Element {
 }
 
 export default function RootNavigator(): React.JSX.Element {
+  const colors = useThemeColors();
+  const resolvedThemeMode = useResolvedThemeMode();
+  const navigationTheme = useMemo(
+    () => buildNavigationTheme(resolvedThemeMode),
+    [resolvedThemeMode],
+  );
   const hydrated = useAppStore(state => state.hydrated);
   const isAuthenticated = useAppStore(state => Boolean(state.currentUserId && state.token));
 
   if (!hydrated) {
-    return <SplashFallback />;
+    return <SplashFallback colors={colors} />;
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator
         screenOptions={{
           headerShadowVisible: false,

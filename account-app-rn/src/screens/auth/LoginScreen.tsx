@@ -5,13 +5,14 @@ import {Card, Text} from 'react-native-paper';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {loginSchema} from '@/utils/validate';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 import {AuthStackParamList} from '@/navigation/types';
 import {login} from '@/api/auth';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export default function LoginScreen({navigation}: Props): React.JSX.Element {
+  const colors = useThemeColors();
   const [form, setForm] = useState({username: '', password: ''});
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});

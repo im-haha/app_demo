@@ -2,7 +2,7 @@ import React from 'react';
 import {View} from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Text} from 'react-native-paper';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 
 interface Props {
   title: string;
@@ -15,6 +15,8 @@ export default function EmptyState({
   description,
   icon = 'notebook-outline',
 }: Props): React.JSX.Element {
+  const colors = useThemeColors();
+
   return (
     <View
       style={{

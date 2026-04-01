@@ -1,13 +1,15 @@
 import React from 'react';
 import {View} from 'react-native';
 import {ActivityIndicator, Text} from 'react-native-paper';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 
 interface Props {
   text?: string;
 }
 
 export default function Loading({text = '加载中...'}: Props): React.JSX.Element {
+  const colors = useThemeColors();
+
   return (
     <View
       style={{

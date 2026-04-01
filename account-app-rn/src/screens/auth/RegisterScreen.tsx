@@ -7,11 +7,12 @@ import AppInput from '@/components/common/AppInput';
 import {AuthStackParamList} from '@/navigation/types';
 import {register} from '@/api/auth';
 import {registerSchema} from '@/utils/validate';
-import {colors} from '@/theme';
+import {useThemeColors} from '@/theme';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export default function RegisterScreen({navigation}: Props): React.JSX.Element {
+  const colors = useThemeColors();
   const [form, setForm] = useState({
     username: '',
     password: '',

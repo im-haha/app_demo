@@ -1,10 +1,10 @@
 import 'react-native-gesture-handler';
-import React, {useEffect} from 'react';
+import React, {useEffect, useMemo} from 'react';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {Provider as PaperProvider} from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
-import {appTheme} from './src/theme';
+import {buildPaperTheme, useResolvedThemeMode} from './src/theme';
 import {useAppStore} from './src/store/appStore';
 
 function Bootstrap(): React.JSX.Element {
@@ -18,6 +18,12 @@ function Bootstrap(): React.JSX.Element {
 }
 
 export default function App(): React.JSX.Element {
+  const resolvedThemeMode = useResolvedThemeMode();
+  const appTheme = useMemo(
+    () => buildPaperTheme(resolvedThemeMode),
+    [resolvedThemeMode],
+  );
+
   return (
     <GestureHandlerRootView style={{flex: 1}}>
       <SafeAreaProvider>

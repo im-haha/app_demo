@@ -1,4 +1,4 @@
-import React, {useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {
   Animated,
   GestureResponderEvent,
@@ -20,6 +20,12 @@ type DraggableFabProps = {
 
 const EDGE_GAP = 12;
 const TAP_MOVE_THRESHOLD = 6;
+const SNAP_SPRING_CONFIG = {
+  damping: 18,
+  stiffness: 280,
+  mass: 0.8,
+  useNativeDriver: false,
+} as const;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -51,6 +57,34 @@ export default function DraggableFab({
       maxY,
     };
   }, [containerSize.height, containerSize.width, size]);
+
+  const animateTo = useCallback(
+    (position: {x: number; y: number}): void => {
+      currentPosRef.current = position;
+      Animated.spring(pan, {
+        toValue: position,
+        ...SNAP_SPRING_CONFIG,
+      }).start();
+    },
+    [pan],
+  );
+
+  const snapToEdge = useCallback((): void => {
+    const targetX =
+      currentPosRef.current.x + size / 2 <= containerSize.width / 2
+        ? bounds.minX
+        : bounds.maxX;
+    const targetY = clamp(currentPosRef.current.y, bounds.minY, bounds.maxY);
+    animateTo({x: targetX, y: targetY});
+  }, [
+    animateTo,
+    bounds.maxX,
+    bounds.maxY,
+    bounds.minX,
+    bounds.minY,
+    containerSize.width,
+    size,
+  ]);
 
   const panResponder = useMemo(
     () =>
@@ -84,7 +118,7 @@ export default function DraggableFab({
           pan.setValue(currentPosRef.current);
         },
         onPanResponderRelease: (
-          event: GestureResponderEvent,
+          _event: GestureResponderEvent,
           gestureState: PanResponderGestureState,
         ) => {
           if (
@@ -94,22 +128,35 @@ export default function DraggableFab({
           ) {
             onPress();
           }
-
-          event.persist();
+          snapToEdge();
         },
         onPanResponderTerminate: () => {
           isTapRef.current = false;
+          snapToEdge();
         },
       }),
-    [bounds.maxX, bounds.maxY, bounds.minX, bounds.minY, onPress, pan],
+    [
+      bounds.maxX,
+      bounds.maxY,
+      bounds.minX,
+      bounds.minY,
+      onPress,
+      pan,
+      snapToEdge,
+    ],
   );
 
   function handleContainerLayout(event: LayoutChangeEvent): void {
     const {width, height} = event.nativeEvent.layout;
     setContainerSize({width, height});
 
-    const defaultX = Math.max(width - size - rightOffset, EDGE_GAP);
-    const defaultY = Math.max(height - size - bottomOffset, EDGE_GAP);
+    const minX = EDGE_GAP;
+    const maxX = Math.max(width - size - EDGE_GAP, EDGE_GAP);
+    const minY = EDGE_GAP;
+    const maxY = Math.max(height - size - EDGE_GAP, EDGE_GAP);
+
+    const defaultX = clamp(width - size - rightOffset, minX, maxX);
+    const defaultY = clamp(height - size - bottomOffset, minY, maxY);
 
     if (!ready) {
       currentPosRef.current = {
@@ -122,19 +169,10 @@ export default function DraggableFab({
     }
 
     const clamped = {
-      x: clamp(
-        currentPosRef.current.x,
-        EDGE_GAP,
-        Math.max(width - size - EDGE_GAP, EDGE_GAP),
-      ),
-      y: clamp(
-        currentPosRef.current.y,
-        EDGE_GAP,
-        Math.max(height - size - EDGE_GAP, EDGE_GAP),
-      ),
+      x: currentPosRef.current.x + size / 2 <= width / 2 ? minX : maxX,
+      y: clamp(currentPosRef.current.y, minY, maxY),
     };
-    currentPosRef.current = clamped;
-    pan.setValue(clamped);
+    animateTo(clamped);
   }
 
   return (

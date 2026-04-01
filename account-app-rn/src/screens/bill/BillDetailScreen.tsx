@@ -2,7 +2,6 @@ import React, {useMemo} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Button, Card, Text} from 'react-native-paper';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
@@ -10,10 +9,14 @@ import {colors} from '@/theme';
 import {formatCurrency, formatDateLabel} from '@/utils/format';
 import {deleteBill} from '@/api/bill';
 import {accountTypeOptions} from '@/utils/constants';
+import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BillDetail'>;
 
-export default function BillDetailScreen({navigation, route}: Props): React.JSX.Element {
+export default function BillDetailScreen({
+  navigation,
+  route,
+}: Props): React.JSX.Element {
   const bills = useAppStore(state => state.bills);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
@@ -31,7 +34,9 @@ export default function BillDetailScreen({navigation, route}: Props): React.JSX.
   const currentCategory = categories.find(item => item.id === bill?.categoryId);
 
   if (!bill) {
-    return <EmptyState title="账单不存在" description="这条账单可能已经被删除。" />;
+    return (
+      <EmptyState title="账单不存在" description="这条账单可能已经被删除。" />
+    );
   }
 
   const billId = bill.id;
@@ -53,33 +58,39 @@ export default function BillDetailScreen({navigation, route}: Props): React.JSX.
 
   return (
     <ScrollView contentContainerStyle={{padding: 20, gap: 16}}>
-      <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
+      <Card
+        mode="contained"
+        style={{backgroundColor: colors.surface, borderRadius: 28}}>
         <Card.Content style={{gap: 18}}>
           <View style={{alignItems: 'center', gap: 10}}>
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 24,
-                backgroundColor: `${currentCategory?.color ?? colors.primary}20`,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <MaterialCommunityIcons
-                name={currentCategory?.icon ?? 'shape'}
-                size={34}
-                color={currentCategory?.color ?? colors.primary}
-              />
-            </View>
-            <Text variant="headlineSmall" style={{fontWeight: '800', color: amountColor}}>
+            <BillCategoryIcon
+              categoryName={currentCategory?.name}
+              categoryIcon={currentCategory?.icon}
+              size={72}
+              iconSize={34}
+            />
+            <Text
+              variant="headlineSmall"
+              style={{fontWeight: '800', color: amountColor}}>
               {bill.type === 'INCOME' ? '+' : '-'}
               {formatCurrency(bill.amount)}
             </Text>
-            <Text variant="titleMedium">{currentCategory?.name ?? '未分类'}</Text>
+            <Text variant="titleMedium">
+              {currentCategory?.name ?? '未分类'}
+            </Text>
           </View>
           <View style={{gap: 12}}>
-            <Text>账户：{accountTypeOptions.find(item => item.value === bill.accountType)?.label}</Text>
-            <Text>时间：{formatDateLabel(bill.billTime)} {bill.billTime.slice(11, 16)}</Text>
+            <Text>
+              账户：
+              {
+                accountTypeOptions.find(item => item.value === bill.accountType)
+                  ?.label
+              }
+            </Text>
+            <Text>
+              时间：{formatDateLabel(bill.billTime)}{' '}
+              {bill.billTime.slice(11, 16)}
+            </Text>
             <Text>备注：{bill.remark || '无备注'}</Text>
             <Text>创建时间：{bill.createdAt}</Text>
           </View>

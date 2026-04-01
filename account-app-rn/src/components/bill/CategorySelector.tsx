@@ -1,8 +1,8 @@
 import React from 'react';
 import {ScrollView, View} from 'react-native';
 import {Chip, Text} from 'react-native-paper';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import {Category} from '@/types/bill';
+import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 
 interface Props {
   categories: Category[];
@@ -24,18 +24,27 @@ function CategorySelector({
             <Chip
               key={category.id}
               selected={selectedId === category.id}
+              showSelectedCheck={false}
               onPress={() => onChange(category.id)}
               style={{
-                backgroundColor: selectedId === category.id ? category.color : undefined,
+                backgroundColor:
+                  selectedId === category.id ? category.color : undefined,
               }}
               textStyle={{
                 color: selectedId === category.id ? '#FFFFFF' : undefined,
               }}
               icon={() => (
-                <MaterialCommunityIcons
-                  name={category.icon}
-                  size={18}
-                  color={selectedId === category.id ? '#FFFFFF' : category.color}
+                <BillCategoryIcon
+                  categoryName={category.name}
+                  categoryIcon={category.icon}
+                  size={24}
+                  iconSize={14}
+                  iconColor={selectedId === category.id ? '#FFFFFF' : undefined}
+                  bgColor={
+                    selectedId === category.id
+                      ? 'rgba(255,255,255,0.22)'
+                      : undefined
+                  }
                 />
               )}>
               {category.name}

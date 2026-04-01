@@ -5,5 +5,7 @@ build
 *.log
 account-app-rn/node_modules
 account-app-rn/ios/Pods
+account-app-rn/ios/**/*.xcworkspace/xcuserdata/
+account-app-rn/ios/**/*.xcodeproj/xcuserdata/
 account-app-server/target
 account-app-server/data

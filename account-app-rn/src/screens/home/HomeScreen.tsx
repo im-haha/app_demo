@@ -1,11 +1,11 @@
-import React, {useMemo} from 'react';
-import {ScrollView, View} from 'react-native';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {Animated, ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Card, ProgressBar, Text} from 'react-native-paper';
+import {Card, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
-import {useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
@@ -14,6 +14,8 @@ import DraggableFab from '@/components/common/DraggableFab';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
+  const resolvedThemeMode = useResolvedThemeMode();
+  const isDark = resolvedThemeMode === 'dark';
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
@@ -112,6 +114,24 @@ export default function HomeScreen(): React.JSX.Element {
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const budgetBarAnim = useRef(new Animated.Value(0)).current;
+  const [budgetTrackWidth, setBudgetTrackWidth] = useState(0);
+  const budgetUsageRate = Math.min(Math.max(budget.usageRate, 0), 1);
+  const budgetFillWidth = budgetBarAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, budgetTrackWidth],
+  });
+
+  useEffect(() => {
+    budgetBarAnim.stopAnimation();
+    Animated.spring(budgetBarAnim, {
+      toValue: budgetUsageRate,
+      damping: 14,
+      stiffness: 170,
+      mass: 0.94,
+      useNativeDriver: false,
+    }).start();
+  }, [budgetBarAnim, budgetUsageRate]);
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -222,11 +242,28 @@ export default function HomeScreen(): React.JSX.Element {
                   {budget.budgetAmount > 0 ? '已设置' : '未设置'}
                 </Text>
               </View>
-              <ProgressBar
-                progress={budget.usageRate}
-                color={colors.secondary}
-                style={{height: 10}}
-              />
+              <View
+                onLayout={event =>
+                  setBudgetTrackWidth(event.nativeEvent.layout.width)
+                }
+                style={{
+                  height: 10,
+                  borderRadius: 999,
+                  overflow: 'hidden',
+                  backgroundColor:
+                    isDark
+                      ? 'rgba(173,190,184,0.14)'
+                      : 'rgba(26,32,44,0.07)',
+                }}>
+                <Animated.View
+                  style={{
+                    height: 10,
+                    width: budgetFillWidth,
+                    borderRadius: 999,
+                    backgroundColor: colors.secondary,
+                  }}
+                />
+              </View>
               <View
                 style={{flexDirection: 'row', justifyContent: 'space-between'}}>
                 <Text style={{color: colors.muted}}>

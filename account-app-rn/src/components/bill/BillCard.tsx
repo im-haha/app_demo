@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, View} from 'react-native';
 import {Card, Text} from 'react-native-paper';
 import {BillRecord, Category} from '@/types/bill';
-import {useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {formatCurrency, formatDateTime} from '@/utils/format';
 import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 
@@ -18,7 +18,11 @@ export default function BillCard({
   onPress,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
+  const resolvedThemeMode = useResolvedThemeMode();
+  const isDark = resolvedThemeMode === 'dark';
   const amountColor = bill.type === 'INCOME' ? colors.income : colors.expense;
+  const subTextColor = isDark ? '#A8B7B3' : colors.muted;
+  const timeTextColor = isDark ? '#97A9A4' : colors.muted;
 
   return (
     <Pressable onPress={onPress}>
@@ -42,8 +46,10 @@ export default function BillCard({
             iconSize={20}
           />
           <View style={{flex: 1, gap: 4}}>
-            <Text variant="titleMedium">{category?.name ?? '未分类'}</Text>
-            <Text variant="bodySmall" style={{color: colors.muted}}>
+            <Text variant="titleMedium" style={{color: colors.text, fontWeight: '700'}}>
+              {category?.name ?? '未分类'}
+            </Text>
+            <Text variant="bodyMedium" style={{color: subTextColor}}>
               {bill.remark || '无备注'}
             </Text>
           </View>
@@ -54,7 +60,7 @@ export default function BillCard({
               {bill.type === 'INCOME' ? '+' : '-'}
               {formatCurrency(bill.amount)}
             </Text>
-            <Text variant="bodySmall" style={{color: colors.muted}}>
+            <Text variant="bodyMedium" style={{color: timeTextColor}}>
               {formatDateTime(bill.billTime)}
             </Text>
           </View>

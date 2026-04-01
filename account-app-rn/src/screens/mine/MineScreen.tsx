@@ -1,7 +1,7 @@
 import React, {useMemo, useState} from 'react';
-import {Image, ScrollView, StyleSheet, View} from 'react-native';
+import {Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Button, Card, Dialog, List, Portal, Text} from 'react-native-paper';
+import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
@@ -15,6 +15,28 @@ const THEME_LABEL_MAP: Record<ThemePreference, string> = {
   LIGHT: '浅色',
   DARK: '深色（护眼）',
 };
+const THEME_DESC_MAP: Record<ThemePreference, string> = {
+  SYSTEM: '自动跟随手机系统外观',
+  LIGHT: '保持当前清爽浅色风格',
+  DARK: '低亮度护眼，夜间更舒适',
+};
+
+function hexToRgba(hex: string, alpha: number): string {
+  const normalized = hex.replace('#', '');
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map(char => `${char}${char}`)
+          .join('')
+      : normalized;
+
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 export default function MineScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -33,6 +55,11 @@ export default function MineScreen(): React.JSX.Element {
   );
   const currentThemeLabel = THEME_LABEL_MAP[themePreference];
   const activeThemeLabel = resolvedThemeMode === 'dark' ? '深色' : '浅色';
+  const modalMaskColor = isDark
+    ? 'rgba(5, 10, 14, 0.74)'
+    : 'rgba(24, 34, 33, 0.38)';
+  const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
+  const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -229,30 +256,85 @@ export default function MineScreen(): React.JSX.Element {
         </Card>
       </ScrollView>
       <Portal>
-        <Dialog
+        <Modal
           visible={themeDialogVisible}
           onDismiss={() => setThemeDialogVisible(false)}
-          style={{backgroundColor: colors.surface}}>
-          <Dialog.Title>主题模式</Dialog.Title>
-          <Dialog.Content style={{gap: 10}}>
-            {THEME_OPTIONS.map(option => (
-              <Button
-                key={option}
-                mode={themePreference === option ? 'contained' : 'outlined'}
-                buttonColor={themePreference === option ? colors.primary : undefined}
-                textColor={themePreference === option ? '#FFFFFF' : colors.text}
-                onPress={() => setThemePreference(option)}>
-                {THEME_LABEL_MAP[option]}
-              </Button>
-            ))}
+          contentContainerStyle={styles.themeModalContainer}
+          style={{backgroundColor: modalMaskColor}}>
+          <View
+            style={[
+              styles.themeModalCard,
+              {
+                backgroundColor: modalCardColor,
+                borderColor: modalCardBorder,
+              },
+            ]}>
+            <View
+              style={[
+                styles.themeModalHeader,
+                {
+                  backgroundColor: hexToRgba(colors.primary, isDark ? 0.22 : 0.1),
+                  borderColor: hexToRgba(colors.primary, isDark ? 0.28 : 0.16),
+                },
+              ]}>
+              <Text variant="titleLarge" style={{fontWeight: '800', color: colors.text}}>
+                主题模式
+              </Text>
+              <Text variant="bodySmall" style={{color: colors.muted}}>
+                选择你偏好的显示风格
+              </Text>
+            </View>
+
+            <View style={styles.themeOptionGroup}>
+              {THEME_OPTIONS.map(option => {
+                const selected = themePreference === option;
+
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => setThemePreference(option)}
+                    style={[
+                      styles.themeOptionCard,
+                      {
+                        backgroundColor: selected
+                          ? colors.primary
+                          : isDark
+                            ? 'rgba(255,255,255,0.02)'
+                            : '#FFFFFF',
+                        borderColor: selected
+                          ? colors.primary
+                          : isDark
+                            ? '#334951'
+                            : '#DDD2C0',
+                      },
+                    ]}>
+                    <Text
+                      variant="titleMedium"
+                      style={{
+                        color: selected ? '#FFFFFF' : colors.text,
+                        fontWeight: '700',
+                      }}>
+                      {THEME_LABEL_MAP[option]}
+                    </Text>
+                    <Text
+                      variant="bodySmall"
+                      style={{color: selected ? '#E3F0EC' : colors.muted}}>
+                      {THEME_DESC_MAP[option]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <Text variant="bodySmall" style={{color: colors.muted}}>
               当前系统生效主题：{activeThemeLabel}
             </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setThemeDialogVisible(false)}>关闭</Button>
-          </Dialog.Actions>
-        </Dialog>
+
+            <View style={styles.themeActions}>
+              <Button onPress={() => setThemeDialogVisible(false)}>关闭</Button>
+            </View>
+          </View>
+        </Modal>
       </Portal>
     </SafeAreaView>
   );
@@ -331,5 +413,39 @@ const styles = StyleSheet.create({
     borderTopWidth: 1.8,
     borderRightWidth: 1.8,
     transform: [{rotate: '45deg'}],
+  },
+  themeModalContainer: {
+    paddingHorizontal: 24,
+  },
+  themeModalCard: {
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 8,
+  },
+  themeModalHeader: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  themeOptionGroup: {
+    gap: 10,
+  },
+  themeOptionCard: {
+    borderRadius: 18,
+    borderWidth: 1.2,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  themeActions: {
+    alignItems: 'flex-end',
   },
 });

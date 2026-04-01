@@ -1,21 +1,27 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Animated, Easing, Pressable, ScrollView, View} from 'react-native';
 import dayjs from 'dayjs';
-import {Chip, Text} from 'react-native-paper';
+import {Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import PieChartCard from '@/components/stats/PieChartCard';
 import TrendChartCard from '@/components/stats/TrendChartCard';
-import {useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 
 export default function StatsScreen(): React.JSX.Element {
   const colors = useThemeColors();
+  const resolvedThemeMode = useResolvedThemeMode();
+  const isDark = resolvedThemeMode === 'dark';
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
   const [switchWidth, setSwitchWidth] = useState(0);
+  const [rangeSwitchWidth, setRangeSwitchWidth] = useState(0);
   const typeSwitchAnim = useRef(
     new Animated.Value(type === 'EXPENSE' ? 0 : 1),
+  ).current;
+  const rangeSwitchAnim = useRef(
+    new Animated.Value(rangeDays === 7 ? 0 : 1),
   ).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslateY = useRef(new Animated.Value(0)).current;
@@ -105,36 +111,91 @@ export default function StatsScreen(): React.JSX.Element {
       };
     });
   }, [userBills, rangeDays, type]);
+  const previousPeriodTotal = useMemo(() => {
+    const currentStart = dayjs()
+      .subtract(rangeDays - 1, 'day')
+      .startOf('day');
+    const previousStart = currentStart.subtract(rangeDays, 'day');
+
+    return userBills
+      .filter(bill => {
+        if (bill.type !== type) {
+          return false;
+        }
+        const billTime = dayjs(bill.billTime);
+        return (
+          billTime.isAfter(previousStart.subtract(1, 'millisecond')) &&
+          billTime.isBefore(currentStart)
+        );
+      })
+      .reduce((sum, bill) => sum + bill.amount, 0);
+  }, [rangeDays, type, userBills]);
   const indicatorWidth = Math.max((switchWidth - 4) / 2, 0);
   const indicatorTranslateX = typeSwitchAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [2, 2 + indicatorWidth],
   });
+  const rangeIndicatorWidth = Math.max((rangeSwitchWidth - 4) / 2, 0);
+  const rangeIndicatorTranslateX = rangeSwitchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, 2 + rangeIndicatorWidth],
+  });
+  const switchThumbBackground =
+    type === 'EXPENSE'
+      ? isDark
+        ? 'rgba(224,106,58,0.26)'
+        : 'rgba(224,106,58,0.14)'
+      : isDark
+        ? 'rgba(45,156,116,0.28)'
+        : 'rgba(45,156,116,0.16)';
+  const switchTrackBackground = isDark ? '#101B21' : '#F7F2E8';
+  const switchBorderColor = isDark
+    ? 'rgba(142,148,143,0.28)'
+    : 'rgba(142,148,143,0.2)';
+  const selectedExpenseTextColor = isDark ? '#FFD8CB' : '#8A3E22';
+  const selectedIncomeTextColor = isDark ? '#CBF3E4' : '#216B4E';
+  const rangeTrackBackground = isDark ? '#111B22' : '#FBF7EF';
+  const rangeBorderColor = isDark
+    ? 'rgba(142,148,143,0.26)'
+    : 'rgba(142,148,143,0.2)';
+  const rangeThumbBackground = isDark ? '#2B3646' : '#ECE4FC';
+  const selectedRangeTextColor = isDark ? '#EAF2F0' : '#1F4346';
 
   useEffect(() => {
-    Animated.timing(typeSwitchAnim, {
+    Animated.spring(typeSwitchAnim, {
       toValue: type === 'EXPENSE' ? 0 : 1,
-      duration: 160,
-      easing: Easing.out(Easing.cubic),
+      damping: 18,
+      stiffness: 210,
+      mass: 0.9,
       useNativeDriver: true,
     }).start();
   }, [type, typeSwitchAnim]);
 
   useEffect(() => {
-    contentOpacity.setValue(0.55);
-    contentTranslateY.setValue(10);
+    Animated.spring(rangeSwitchAnim, {
+      toValue: rangeDays === 7 ? 0 : 1,
+      damping: 18,
+      stiffness: 215,
+      mass: 0.92,
+      useNativeDriver: true,
+    }).start();
+  }, [rangeDays, rangeSwitchAnim]);
+
+  useEffect(() => {
+    contentOpacity.setValue(0.76);
+    contentTranslateY.setValue(14);
     Animated.parallel([
       Animated.timing(contentOpacity, {
         toValue: 1,
-        duration: 220,
+        duration: 320,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.spring(contentTranslateY, {
         toValue: 0,
-        damping: 14,
-        stiffness: 180,
-        mass: 0.9,
+        damping: 16,
+        stiffness: 165,
+        mass: 1.02,
         useNativeDriver: true,
       }),
     ]).start();
@@ -154,6 +215,20 @@ export default function StatsScreen(): React.JSX.Element {
     }
     segmentedSwitchHaptic();
     setRangeDays(nextRange);
+  }
+
+  function getSegmentTextColor(segmentType: 'INCOME' | 'EXPENSE'): string {
+    const isSelected = segmentType === type;
+    if (!isSelected) {
+      return colors.muted;
+    }
+    return segmentType === 'EXPENSE'
+      ? selectedExpenseTextColor
+      : selectedIncomeTextColor;
+  }
+
+  function getRangeTextColor(targetRange: 7 | 30): string {
+    return rangeDays === targetRange ? selectedRangeTextColor : colors.muted;
   }
 
   return (
@@ -179,11 +254,11 @@ export default function StatsScreen(): React.JSX.Element {
             onLayout={event => setSwitchWidth(event.nativeEvent.layout.width)}
             style={{
               height: 56,
-              backgroundColor: colors.surface,
+              backgroundColor: switchTrackBackground,
               borderRadius: 28,
               padding: 2,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: switchBorderColor,
               flexDirection: 'row',
               overflow: 'hidden',
             }}>
@@ -195,7 +270,7 @@ export default function StatsScreen(): React.JSX.Element {
                 height: 52,
                 width: indicatorWidth,
                 borderRadius: 26,
-                backgroundColor: '#E3E9E8',
+                backgroundColor: switchThumbBackground,
                 transform: [{translateX: indicatorTranslateX}],
               }}
             />
@@ -211,7 +286,7 @@ export default function StatsScreen(): React.JSX.Element {
                 variant="titleMedium"
                 style={{
                   fontWeight: '700',
-                  color: type === 'EXPENSE' ? colors.text : colors.muted,
+                  color: getSegmentTextColor('EXPENSE'),
                 }}>
                 支出
               </Text>
@@ -228,26 +303,67 @@ export default function StatsScreen(): React.JSX.Element {
                 variant="titleMedium"
                 style={{
                   fontWeight: '700',
-                  color: type === 'INCOME' ? colors.text : colors.muted,
+                  color: getSegmentTextColor('INCOME'),
                 }}>
                 收入
               </Text>
             </Pressable>
           </View>
 
-          <View style={{flexDirection: 'row', gap: 12}}>
-            <Chip
-              selected={rangeDays === 7}
-              showSelectedCheck={false}
+          <View
+            onLayout={event =>
+              setRangeSwitchWidth(event.nativeEvent.layout.width)
+            }
+            style={{
+              height: 44,
+              backgroundColor: rangeTrackBackground,
+              borderRadius: 22,
+              borderWidth: 1,
+              borderColor: rangeBorderColor,
+              padding: 2,
+              flexDirection: 'row',
+              overflow: 'hidden',
+            }}>
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: 0,
+                height: 40,
+                width: rangeIndicatorWidth,
+                borderRadius: 20,
+                backgroundColor: rangeThumbBackground,
+                transform: [{translateX: rangeIndicatorTranslateX}],
+              }}
+            />
+            <Pressable
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1,
+              }}
               onPress={() => handleRangeChange(7)}>
-              最近 7 天
-            </Chip>
-            <Chip
-              selected={rangeDays === 30}
-              showSelectedCheck={false}
+              <Text
+                variant="titleSmall"
+                style={{fontWeight: '700', color: getRangeTextColor(7)}}>
+                最近 7 天
+              </Text>
+            </Pressable>
+            <Pressable
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1,
+              }}
               onPress={() => handleRangeChange(30)}>
-              最近 30 天
-            </Chip>
+              <Text
+                variant="titleSmall"
+                style={{fontWeight: '700', color: getRangeTextColor(30)}}>
+                最近 30 天
+              </Text>
+            </Pressable>
           </View>
         </View>
         <ScrollView
@@ -302,6 +418,7 @@ export default function StatsScreen(): React.JSX.Element {
               data={trendStats}
               type={type}
               rangeDays={rangeDays}
+              previousTotal={previousPeriodTotal}
             />
           </Animated.View>
         </ScrollView>

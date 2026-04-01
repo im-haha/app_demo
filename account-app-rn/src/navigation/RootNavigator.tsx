@@ -53,8 +53,9 @@ export default function RootNavigator(): React.JSX.Element {
       <Stack.Navigator
         screenOptions={{
           headerShadowVisible: false,
-          headerStyle: {backgroundColor: colors.surface},
+          headerStyle: {backgroundColor: colors.background},
           headerTintColor: colors.text,
+          headerTitleStyle: {color: colors.text, fontWeight: '700'},
           headerBackButtonDisplayMode: 'minimal',
           contentStyle: {backgroundColor: colors.background},
         }}>
@@ -66,11 +67,23 @@ export default function RootNavigator(): React.JSX.Element {
               options={{headerShown: false}}
             />
             <Stack.Screen name="BillAdd" component={BillAddScreen} options={{title: '新增账单'}} />
-            <Stack.Screen name="BillEdit" component={BillEditScreen} options={{title: '编辑账单'}} />
+            <Stack.Screen
+              name="BillEdit"
+              component={BillEditScreen}
+              options={{
+                title: '编辑账单',
+                animation: 'fade',
+                headerStyle: {backgroundColor: colors.background},
+              }}
+            />
             <Stack.Screen
               name="BillDetail"
               component={BillDetailScreen}
-              options={{title: '账单详情'}}
+              options={{
+                title: '账单详情',
+                animation: 'fade',
+                headerStyle: {backgroundColor: colors.background},
+              }}
             />
             <Stack.Screen name="Budget" component={BudgetScreen} options={{title: '月预算'}} />
             <Stack.Screen

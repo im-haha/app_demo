@@ -95,6 +95,64 @@ npm run android:assemble
 npm run android
 ```
 
+## Android GitHub Release 发包（APK 直装）
+
+本仓库已支持自动打包并上传 APK 到 GitHub Release，流程如下：
+
+### 1. 一次性准备签名
+
+先在本地生成正式签名（不要提交到仓库）：
+
+```bash
+keytool -genkeypair -v \
+  -storetype PKCS12 \
+  -keystore release.keystore \
+  -alias accountapp \
+  -keyalg RSA \
+  -keysize 2048 \
+  -validity 10000
+```
+
+把 `release.keystore` 转成 Base64（用于 GitHub Secret）：
+
+```bash
+base64 release.keystore | tr -d '\n'
+```
+
+### 2. 配置 GitHub Secrets
+
+在仓库 `Settings -> Secrets and variables -> Actions` 新增：
+
+- `ANDROID_KEYSTORE_BASE64`：上一步 Base64 内容
+- `ANDROID_KEYSTORE_PASSWORD`：keystore 密码
+- `ANDROID_KEY_ALIAS`：别名（例如 `accountapp`）
+- `ANDROID_KEY_PASSWORD`：key 密码
+
+本地签名模板参考：
+
+- [account-app-rn/android/keystore.properties.example](./account-app-rn/android/keystore.properties.example)
+
+### 3. 触发发版
+
+已内置工作流：
+
+- [.github/workflows/android-release.yml](./.github/workflows/android-release.yml)
+
+可选两种方式：
+
+1. 推送标签触发（推荐）
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+2. 在 GitHub Actions 页面手动触发 `Android Release APK`，输入 `tag`。
+
+### 4. 下载与安装
+
+工作流成功后，会自动创建/更新对应的 GitHub Release，并上传 APK 资产（文件名类似 `accountapp-v1.0.1-android.apk`），安卓手机可直接在 Release 页面下载安装。
+
 ## 已修复的兼容性问题
 
 1. `run-ios` 在当前终端环境无法自动启动 Metro：已提供 `start:ios + ios:sim` 双命令方案

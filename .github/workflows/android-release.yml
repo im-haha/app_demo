@@ -1,0 +1,166 @@
+name: Android Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "发布标签（例如 v1.0.1）"
+        required: true
+        type: string
+      release_name:
+        description: "Release 标题（可选）"
+        required: false
+        type: string
+      release_notes:
+        description: "Release 说明（可选）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+            NAME="${{ github.event.inputs.release_name }}"
+            NOTES="${{ github.event.inputs.release_notes }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            NAME=""
+            NOTES=""
+          fi
+
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::缺少发布标签 tag"
+            exit 1
+          fi
+
+          if [[ -z "${NAME}" ]]; then
+            NAME="Android ${TAG}"
+          fi
+
+          HAS_NOTES=false
+          if [[ -n "${NOTES}" ]]; then
+            HAS_NOTES=true
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "name=${NAME}" >> "${GITHUB_OUTPUT}"
+          echo "has_notes=${HAS_NOTES}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "notes<<EOF"
+            echo "${NOTES}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: account-app-rn/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install dependencies
+        working-directory: account-app-rn
+        run: npm ci
+
+      - name: Prepare Android signing files
+        working-directory: account-app-rn/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!var}" ]]; then
+              echo "::error::缺少仓库 Secret: ${var}"
+              missing=1
+            fi
+          done
+
+          if [[ "${missing}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > app/release.keystore
+          {
+            echo "storeFile=app/release.keystore"
+            echo "storePassword=${ANDROID_KEYSTORE_PASSWORD}"
+            echo "keyAlias=${ANDROID_KEY_ALIAS}"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+          } > keystore.properties
+
+      - name: Build release APK
+        working-directory: account-app-rn/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean assembleRelease
+
+      - name: Rename APK artifact
+        id: artifact
+        run: |
+          SRC="account-app-rn/android/app/build/outputs/apk/release/app-release.apk"
+          if [[ ! -f "${SRC}" ]]; then
+            echo "::error::未找到 APK 文件: ${SRC}"
+            exit 1
+          fi
+
+          SAFE_TAG="${{ steps.meta.outputs.tag }}"
+          SAFE_TAG="${SAFE_TAG//\//-}"
+          DEST="account-app-rn/android/app/build/outputs/apk/release/accountapp-${SAFE_TAG}-android.apk"
+          cp "${SRC}" "${DEST}"
+          echo "path=${DEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-${{ steps.meta.outputs.tag }}
+          path: ${{ steps.artifact.outputs.path }}
+          if-no-files-found: error
+
+      - name: Publish release with custom notes
+        if: steps.meta.outputs.has_notes == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.meta.outputs.name }}
+          body: ${{ steps.meta.outputs.notes }}
+          files: ${{ steps.artifact.outputs.path }}
+
+      - name: Publish release with auto notes
+        if: steps.meta.outputs.has_notes != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.meta.outputs.name }}
+          generate_release_notes: true
+          files: ${{ steps.artifact.outputs.path }}
+
+      - name: Cleanup signing files
+        if: always()
+        working-directory: account-app-rn/android
+        run: rm -f keystore.properties app/release.keystore

@@ -5,6 +5,7 @@
   "scripts": {
     "android": "react-native run-android",
     "android:assemble": "cd android && ./gradlew assembleDebug",
+    "android:release": "cd android && ./gradlew clean assembleRelease",
     "ios": "react-native run-ios",
     "ios:sim": "react-native run-ios --simulator \"iPhone 17\" --no-packager",
     "ios:pods": "cd ios && bundle exec pod install",

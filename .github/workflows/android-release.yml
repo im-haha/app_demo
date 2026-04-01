@@ -159,9 +159,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
-            --parallel \
-            --build-cache \
-            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+            --build-cache
 
       - name: Rename APK artifact
         id: artifact

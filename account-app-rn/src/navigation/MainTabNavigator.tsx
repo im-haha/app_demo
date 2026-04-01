@@ -40,9 +40,7 @@ function HapticTabButton({
       onLongPress={onLongPress}
       style={style}
       onPress={event => {
-        if (!accessibilityState?.selected) {
-          tabSwitchHaptic();
-        }
+        tabSwitchHaptic();
         onPress?.(event);
       }}>
       {children}

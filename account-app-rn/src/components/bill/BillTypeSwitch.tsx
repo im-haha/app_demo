@@ -8,15 +8,19 @@ interface Props {
   onChange: (value: BillType) => void;
 }
 
-export default function BillTypeSwitch({value, onChange}: Props): React.JSX.Element {
+const typeButtons = billTypeOptions.map(item => ({
+  label: item.label,
+  value: item.value,
+}));
+
+function BillTypeSwitch({value, onChange}: Props): React.JSX.Element {
   return (
     <SegmentedButtons
       value={value}
       onValueChange={next => onChange(next as BillType)}
-      buttons={billTypeOptions.map(item => ({
-        label: item.label,
-        value: item.value,
-      }))}
+      buttons={typeButtons}
     />
   );
 }
+
+export default React.memo(BillTypeSwitch);

@@ -49,6 +49,7 @@ export default function RootNavigator(): React.JSX.Element {
           headerShadowVisible: false,
           headerStyle: {backgroundColor: colors.surface},
           headerTintColor: colors.text,
+          headerBackButtonDisplayMode: 'minimal',
           contentStyle: {backgroundColor: colors.background},
         }}>
         {isAuthenticated ? (

@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import {Menu, SegmentedButtons, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
@@ -32,10 +32,35 @@ export default function BillForm({
   const [remark, setRemark] = useState(initialValue?.remark ?? '');
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
 
-  const categoryOptions = categories(type);
+  const categoryOptions = useMemo(() => categories(type), [categories, type]);
   const selectedCategoryId = categoryId ?? categoryOptions[0]?.id ?? null;
+  const accountLabel =
+    accountTypeOptions.find(item => item.value === accountType)?.label ?? '选择账户';
+  const accountButtons = useMemo(
+    () => [
+      {
+        value: accountType,
+        label: accountLabel,
+      },
+    ],
+    [accountLabel, accountType],
+  );
+  const openAccountMenu = useCallback(() => setAccountMenuVisible(true), []);
+  const closeAccountMenu = useCallback(() => setAccountMenuVisible(false), []);
+  const handleAccountTypeSelect = useCallback((nextAccountType: string) => {
+    setAccountType(nextAccountType as typeof accountType);
+    setAccountMenuVisible(false);
+  }, []);
 
-  function handleSubmit() {
+  const handleTypeChange = useCallback(
+    (next: BillType) => {
+      setType(next);
+      setCategoryId(categories(next)[0]?.id ?? null);
+    },
+    [categories],
+  );
+
+  const handleSubmit = useCallback(() => {
     const parsedAmount = Number(amount);
 
     if (!parsedAmount || parsedAmount <= 0) {
@@ -61,17 +86,11 @@ export default function BillForm({
       billTime: dayjs(billTime).format('YYYY-MM-DD HH:mm:ss'),
       remark: remark.trim(),
     });
-  }
+  }, [accountType, amount, billTime, onSubmit, remark, selectedCategoryId, type]);
 
   return (
     <ScrollView contentContainerStyle={{padding: 20, gap: 18}}>
-      <BillTypeSwitch
-        value={type}
-        onChange={next => {
-          setType(next);
-          setCategoryId(categories(next)[0]?.id ?? null);
-        }}
-      />
+      <BillTypeSwitch value={type} onChange={handleTypeChange} />
 
       <CategorySelector
         categories={categoryOptions}
@@ -91,27 +110,19 @@ export default function BillForm({
         <Text variant="titleSmall">账户</Text>
         <Menu
           visible={accountMenuVisible}
-          onDismiss={() => setAccountMenuVisible(false)}
+          onDismiss={closeAccountMenu}
           anchor={
             <SegmentedButtons
               value={accountType}
-              onValueChange={() => setAccountMenuVisible(true)}
-              buttons={[
-                {
-                  value: accountType,
-                  label: accountTypeOptions.find(item => item.value === accountType)?.label ?? '选择账户',
-                },
-              ]}
+              onValueChange={openAccountMenu}
+              buttons={accountButtons}
             />
           }>
           {accountTypeOptions.map(item => (
             <Menu.Item
               key={item.value}
               title={item.label}
-              onPress={() => {
-                setAccountType(item.value);
-                setAccountMenuVisible(false);
-              }}
+              onPress={() => handleAccountTypeSelect(item.value)}
             />
           ))}
         </Menu>

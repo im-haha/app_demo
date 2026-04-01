@@ -13,7 +13,7 @@ interface Props {
   errorText?: string;
 }
 
-export default function AppInput({
+function AppInput({
   label,
   value,
   onChangeText,
@@ -45,3 +45,5 @@ export default function AppInput({
     </View>
   );
 }
+
+export default React.memo(AppInput);

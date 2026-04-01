@@ -10,7 +10,7 @@ interface Props {
   onChange: (categoryId: number) => void;
 }
 
-export default function CategorySelector({
+function CategorySelector({
   categories,
   selectedId,
   onChange,
@@ -46,3 +46,5 @@ export default function CategorySelector({
     </View>
   );
 }
+
+export default React.memo(CategorySelector);

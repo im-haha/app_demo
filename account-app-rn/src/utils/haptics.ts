@@ -1,14 +1,18 @@
 import {type HapticOptions, trigger} from 'react-native-haptic-feedback';
 
-const HAPTIC_OPTIONS: HapticOptions = {
+const TAB_HAPTIC_OPTIONS: HapticOptions = {
+  enableVibrateFallback: true,
+  ignoreAndroidSystemSettings: false,
+};
+const SEGMENTED_HAPTIC_OPTIONS: HapticOptions = {
   enableVibrateFallback: false,
   ignoreAndroidSystemSettings: false,
 };
 
 export function tabSwitchHaptic(): void {
-  trigger('selection', HAPTIC_OPTIONS);
+  trigger('impactMedium', TAB_HAPTIC_OPTIONS);
 }
 
 export function segmentedSwitchHaptic(): void {
-  trigger('impactLight', HAPTIC_OPTIONS);
+  trigger('impactLight', SEGMENTED_HAPTIC_OPTIONS);
 }

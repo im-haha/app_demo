@@ -1,10 +1,12 @@
 import React, {useMemo} from 'react';
-import {ScrollView, StyleSheet, View} from 'react-native';
+import {Image, ScrollView, StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, List, Text} from 'react-native-paper';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {colors} from '@/theme';
+
+const DEFAULT_AVATAR = require('../../assets/images/avatar-default.jpeg');
 
 export default function MineScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
@@ -23,13 +25,16 @@ export default function MineScreen(): React.JSX.Element {
         gap: 16,
       }}>
       <Card mode="contained" style={{backgroundColor: colors.primary, borderRadius: 28}}>
-        <Card.Content style={{gap: 8}}>
-          <Text variant="headlineSmall" style={{color: '#FFFFFF', fontWeight: '800'}}>
-            {user?.nickname ?? '未登录用户'}
-          </Text>
-          <Text variant="bodyMedium" style={{color: '#D9F2EE'}}>
-            @{user?.username ?? '-'}
-          </Text>
+        <Card.Content style={styles.profileCardContent}>
+          <Image source={DEFAULT_AVATAR} style={styles.avatar} />
+          <View style={{gap: 8, flex: 1}}>
+            <Text variant="headlineSmall" style={{color: '#FFFFFF', fontWeight: '800'}}>
+              {user?.nickname ?? '未登录用户'}
+            </Text>
+            <Text variant="bodyMedium" style={{color: '#D9F2EE'}}>
+              @{user?.username ?? '-'}
+            </Text>
+          </View>
         </Card.Content>
       </Card>
 
@@ -98,6 +103,19 @@ export default function MineScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
+  profileCardContent: {
+    gap: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#D9F2EE',
+    backgroundColor: '#DCE9E7',
+  },
   menuIcon: {
     width: 34,
     height: 34,

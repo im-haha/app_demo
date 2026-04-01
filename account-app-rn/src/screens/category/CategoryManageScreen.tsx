@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import {
   Button,
@@ -26,7 +26,16 @@ export default function CategoryManageScreen(): React.JSX.Element {
   const [name, setName] = useState('');
   const [icon, setIcon] = useState(iconOptions[0]);
   const [color, setColor] = useState(colorOptions[0]);
-  const categories = useAppStore(state => state.getCategories(type));
+  const allCategories = useAppStore(state => state.categories);
+  const currentUserId = useAppStore(state => state.currentUserId);
+  const categories = useMemo(
+    () =>
+      allCategories
+        .filter(category => category.type === type)
+        .filter(category => category.userId === null || category.userId === currentUserId)
+        .sort((left, right) => left.sortNum - right.sortNum),
+    [type, allCategories, currentUserId],
+  );
 
   function openCreate() {
     setEditingId(null);

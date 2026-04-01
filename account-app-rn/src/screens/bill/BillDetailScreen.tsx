@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Button, Card, Text} from 'react-native-paper';
@@ -14,8 +14,19 @@ import {accountTypeOptions} from '@/utils/constants';
 type Props = NativeStackScreenProps<RootStackParamList, 'BillDetail'>;
 
 export default function BillDetailScreen({navigation, route}: Props): React.JSX.Element {
-  const bill = useAppStore(state => state.getBillById(route.params.billId));
+  const bills = useAppStore(state => state.bills);
+  const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
+  const bill = useMemo(
+    () =>
+      bills.find(
+        item =>
+          item.id === route.params.billId &&
+          item.userId === currentUserId &&
+          !item.deleted,
+      ),
+    [bills, currentUserId, route.params.billId],
+  );
 
   const currentCategory = categories.find(item => item.id === bill?.categoryId);
 

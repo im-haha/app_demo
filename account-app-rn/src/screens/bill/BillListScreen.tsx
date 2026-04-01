@@ -1,6 +1,7 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
+import dayjs from 'dayjs';
 import {Chip, FAB, Searchbar, Text} from 'react-native-paper';
 import {useAppStore} from '@/store/appStore';
 import BillCard from '@/components/bill/BillCard';
@@ -12,8 +13,22 @@ export default function BillListScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
   const [keyword, setKeyword] = useState('');
   const [type, setType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
-  const bills = useAppStore(state => state.getBills({keyword, type}));
+  const storeBills = useAppStore(state => state.bills);
+  const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
+  const bills = useMemo(
+    () =>
+      storeBills
+        .filter(bill => bill.userId === currentUserId && !bill.deleted)
+        .filter(bill => (type === 'ALL' ? true : bill.type === type))
+        .filter(bill =>
+          keyword.trim()
+            ? bill.remark.toLowerCase().includes(keyword.toLowerCase().trim())
+            : true,
+        )
+        .sort((left, right) => dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf()),
+    [storeBills, currentUserId, type, keyword],
+  );
 
   return (
     <View style={{flex: 1}}>

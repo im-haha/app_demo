@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, FAB, ProgressBar, Text} from 'react-native-paper';
@@ -11,11 +11,74 @@ import EmptyState from '@/components/common/EmptyState';
 
 export default function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
-  const overview = useAppStore(state => state.getOverview());
-  const budget = useAppStore(state => state.getBudgetByMonth(dayjs().format('YYYY-MM')));
-  const bills = useAppStore(state => state.getBills().slice(0, 5));
+  const month = dayjs().format('YYYY-MM');
+  const users = useAppStore(state => state.users);
+  const storeBills = useAppStore(state => state.bills);
+  const budgets = useAppStore(state => state.budgets);
+  const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
-  const user = useAppStore(state => state.getCurrentUser());
+  const userBills = useMemo(
+    () =>
+      storeBills
+        .filter(bill => bill.userId === currentUserId && !bill.deleted)
+        .sort((left, right) => dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf()),
+    [storeBills, currentUserId],
+  );
+  const overview = useMemo(() => {
+    const today = dayjs().format('YYYY-MM-DD');
+    const todayIncome = userBills
+      .filter(bill => bill.type === 'INCOME' && dayjs(bill.billTime).format('YYYY-MM-DD') === today)
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const todayExpense = userBills
+      .filter(bill => bill.type === 'EXPENSE' && dayjs(bill.billTime).format('YYYY-MM-DD') === today)
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const monthIncome = userBills
+      .filter(bill => bill.type === 'INCOME' && dayjs(bill.billTime).format('YYYY-MM') === month)
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const monthExpense = userBills
+      .filter(bill => bill.type === 'EXPENSE' && dayjs(bill.billTime).format('YYYY-MM') === month)
+      .reduce((sum, bill) => sum + bill.amount, 0);
+
+    return {
+      todayIncome,
+      todayExpense,
+      monthIncome,
+      monthExpense,
+      monthBalance: monthIncome - monthExpense,
+    };
+  }, [userBills, month]);
+  const budget = useMemo(
+    () => {
+      if (!currentUserId) {
+        return {
+          month,
+          budgetAmount: 0,
+          spentAmount: 0,
+          remainingAmount: 0,
+          usageRate: 0,
+        };
+      }
+
+      const budgetSetting = budgets.find(item => item.userId === currentUserId && item.month === month);
+      const spentAmount = userBills
+        .filter(bill => bill.type === 'EXPENSE' && dayjs(bill.billTime).format('YYYY-MM') === month)
+        .reduce((sum, bill) => sum + bill.amount, 0);
+      const budgetAmount = budgetSetting?.amount ?? 0;
+      const remainingAmount = budgetAmount - spentAmount;
+      const usageRate = budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
+
+      return {
+        month,
+        budgetAmount,
+        spentAmount,
+        remainingAmount,
+        usageRate,
+      };
+    },
+    [month, budgets, userBills, currentUserId],
+  );
+  const bills = useMemo(() => userBills.slice(0, 5), [userBills]);
+  const user = useMemo(() => users.find(item => item.id === currentUserId), [users, currentUserId]);
 
   return (
     <View style={{flex: 1}}>

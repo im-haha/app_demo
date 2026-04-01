@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {ScrollView} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, List, Text} from 'react-native-paper';
@@ -7,8 +7,10 @@ import {colors} from '@/theme';
 
 export default function MineScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
-  const user = useAppStore(state => state.getCurrentUser());
+  const users = useAppStore(state => state.users);
+  const currentUserId = useAppStore(state => state.currentUserId);
   const logout = useAppStore(state => state.logout);
+  const user = useMemo(() => users.find(item => item.id === currentUserId), [users, currentUserId]);
 
   return (
     <ScrollView contentContainerStyle={{padding: 20, gap: 16}}>

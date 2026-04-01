@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {Alert} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import BillForm from '@/components/bill/BillForm';
@@ -10,7 +10,18 @@ import {updateBill} from '@/api/bill';
 type Props = NativeStackScreenProps<RootStackParamList, 'BillEdit'>;
 
 export default function BillEditScreen({navigation, route}: Props): React.JSX.Element {
-  const bill = useAppStore(state => state.getBillById(route.params.billId));
+  const bills = useAppStore(state => state.bills);
+  const currentUserId = useAppStore(state => state.currentUserId);
+  const bill = useMemo(
+    () =>
+      bills.find(
+        item =>
+          item.id === route.params.billId &&
+          item.userId === currentUserId &&
+          !item.deleted,
+      ),
+    [bills, currentUserId, route.params.billId],
+  );
   const getCategories = useAppStore(state => state.getCategories);
 
   if (!bill) {

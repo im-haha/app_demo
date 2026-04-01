@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {Alert, ScrollView} from 'react-native';
 import {Card, Text} from 'react-native-paper';
 import AppButton from '@/components/common/AppButton';
@@ -8,7 +8,9 @@ import {useAppStore} from '@/store/appStore';
 import {colors} from '@/theme';
 
 export default function ProfileScreen(): React.JSX.Element {
-  const user = useAppStore(state => state.getCurrentUser());
+  const users = useAppStore(state => state.users);
+  const currentUserId = useAppStore(state => state.currentUserId);
+  const user = useMemo(() => users.find(item => item.id === currentUserId), [users, currentUserId]);
   const [nickname, setNickname] = useState(user?.nickname ?? '');
 
   async function handleSave() {

@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import dayjs from 'dayjs';
 import {Card, ProgressBar, Text} from 'react-native-paper';
@@ -11,7 +11,45 @@ import {formatCurrency} from '@/utils/format';
 
 export default function BudgetScreen(): React.JSX.Element {
   const month = dayjs().format('YYYY-MM');
-  const summary = useAppStore(state => state.getBudgetByMonth(month));
+  const budgets = useAppStore(state => state.budgets);
+  const bills = useAppStore(state => state.bills);
+  const currentUserId = useAppStore(state => state.currentUserId);
+  const summary = useMemo(
+    () => {
+      if (!currentUserId) {
+        return {
+          month,
+          budgetAmount: 0,
+          spentAmount: 0,
+          remainingAmount: 0,
+          usageRate: 0,
+        };
+      }
+
+      const budget = budgets.find(item => item.userId === currentUserId && item.month === month);
+      const spentAmount = bills
+        .filter(
+          bill =>
+            bill.userId === currentUserId &&
+            !bill.deleted &&
+            bill.type === 'EXPENSE' &&
+            dayjs(bill.billTime).format('YYYY-MM') === month,
+        )
+        .reduce((sum, bill) => sum + bill.amount, 0);
+      const budgetAmount = budget?.amount ?? 0;
+      const remainingAmount = budgetAmount - spentAmount;
+      const usageRate = budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
+
+      return {
+        month,
+        budgetAmount,
+        spentAmount,
+        remainingAmount,
+        usageRate,
+      };
+    },
+    [month, budgets, bills, currentUserId],
+  );
   const [amount, setAmount] = useState(summary.budgetAmount > 0 ? String(summary.budgetAmount) : '');
 
   async function handleSave() {

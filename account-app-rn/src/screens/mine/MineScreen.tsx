@@ -1,5 +1,5 @@
 import React from 'react';
-import {ScrollView, View} from 'react-native';
+import {ScrollView} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, List, Text} from 'react-native-paper';
 import {useAppStore} from '@/store/appStore';

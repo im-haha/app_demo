@@ -23,6 +23,7 @@ export default function BillDetailScreen({navigation, route}: Props): React.JSX.
     return <EmptyState title="账单不存在" description="这条账单可能已经被删除。" />;
   }
 
+  const billId = bill.id;
   const amountColor = bill.type === 'INCOME' ? colors.income : colors.expense;
 
   function handleDelete() {
@@ -32,7 +33,7 @@ export default function BillDetailScreen({navigation, route}: Props): React.JSX.
         text: '删除',
         style: 'destructive',
         onPress: async () => {
-          await deleteBill(bill.id);
+          await deleteBill(billId);
           navigation.goBack();
         },
       },
@@ -78,7 +79,7 @@ export default function BillDetailScreen({navigation, route}: Props): React.JSX.
         <Button
           mode="contained-tonal"
           style={{flex: 1}}
-          onPress={() => navigation.navigate('BillEdit', {billId: bill.id})}>
+          onPress={() => navigation.navigate('BillEdit', {billId})}>
           编辑
         </Button>
         <Button

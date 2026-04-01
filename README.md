@@ -1,88 +1,116 @@
-# 记账 App
+# 记账 App（离线优先）
 
-这个仓库按你提供的方案文档拆成两部分：
+仓库包含两部分：
 
-- `account-app-rn`：React Native 离线优先客户端，当前版本可单机本地使用。
-- `account-app-server`：Spring Boot + SQLite 服务端骨架，表结构和接口已对齐，便于后续上线改造成远程服务。
+- `account-app-rn`：React Native 客户端（离线可用，当前主用）
+- `account-app-server`：Spring Boot + SQLite 服务端骨架（后续联网同步可接入）
 
-## 当前交付重点
+## 前后端快速启动命令
 
-这次实现优先保证你“自己先能用”：
+### 前端（React Native，iOS 模拟器）
 
-- 本地注册 / 登录
-- 新增、编辑、删除账单
-- 账单列表与详情
-- 月预算
-- 分类管理
-- 首页概览
-- 最近 7 天 / 30 天趋势
-- 本月分类占比
-
-移动端当前采用 `AsyncStorage + Zustand` 做本地持久化，目的是先把离线可用版本跑通。后续如果切换到线上版，只需要把 `src/api/*` 的本地调用替换成真实后端请求。
-
-## 目录结构
-
-```text
-app_demo/
-├── account-app-rn/
-└── account-app-server/
-```
-
-## 本地启动建议
-
-### 1. React Native 客户端
-
-当前代码已把业务层、页面层和状态层搭好，但当前工作区是空仓库起步，没有自动生成 `ios/`、`android/` 原生壳。
-
-建议你在 `account-app-rn` 下执行标准 RN CLI 初始化后，把现有业务代码接进去：
+终端 1：
 
 ```bash
 cd account-app-rn
-npx @react-native-community/cli init AccountAppShell --directory .
 npm install
+npm run ios:pods
+npm run start:ios
 ```
 
-然后补装依赖：
+终端 2：
 
 ```bash
-npm install zustand dayjs react-hook-form yup @hookform/resolvers
-npm install @react-native-async-storage/async-storage
-npm install react-native-paper react-native-vector-icons react-native-safe-area-context
-npm install react-native-screens react-native-gesture-handler react-native-reanimated
-npm install @react-navigation/native @react-navigation/native-stack @react-navigation/bottom-tabs
-npm install react-native-svg victory-native
+cd account-app-rn
+npm run ios:sim
 ```
 
-iOS 还需要安装 CocoaPods 并执行：
-
-```bash
-cd ios
-pod install
-cd ..
-```
-
-### 2. Spring Boot 服务端
-
-当前工作机里没有 `mvn`，所以我把 Maven 配置和源码准备好了，但没有实际下载依赖构建。
-
-后续你本机装好 Maven 后：
+### 后端（Spring Boot）
 
 ```bash
 cd account-app-server
 mvn spring-boot:run
 ```
 
-SQLite 文件默认会落在：
+## 2026-04-01 运行与兼容性验证结果
+
+已完成真实构建/启动验证：
+
+- iOS 构建：`xcodebuild ... build` 成功（`BUILD SUCCEEDED`）
+- iOS 启动：`run-ios` 已在 `iPhone 17 (iOS 26.2)` 模拟器成功安装并启动
+- Metro：可正常启动
+- TypeScript/ESLint：通过（仅样式类 warning，无阻断错误）
+
+当前环境限制与缺失项：
+
+- Android 未安装 SDK（`ANDROID_HOME`、`adb`、`Android Studio` 缺失），因此 Android 无法在当前机器直接构建
+- `account-app-server` 需要 Maven，但当前机器无 `mvn`
+
+## iOS 本地运行（推荐）
+
+在 `account-app-rn` 目录执行：
+
+```bash
+npm install
+npm run ios:pods
+```
+
+开两个终端：
+
+终端 1（启动 Metro）：
+
+```bash
+npm run start:ios
+```
+
+终端 2（启动模拟器并安装 App）：
+
+```bash
+npm run ios:sim
+```
+
+说明：`ios:sim` 使用 `--no-packager`，可避免某些终端环境下 `run-ios` 自动拉起新终端失败的问题。
+
+## Android 运行前置
+
+需要先补齐 Android 环境：
+
+1. 安装 Android Studio
+2. 安装 Android SDK Platform 35 + Build-Tools 35
+3. 配置 `ANDROID_HOME`（或 `ANDROID_SDK_ROOT`）
+4. 确保 `adb` 在 PATH
+
+然后在 `account-app-rn/android/local.properties` 配置：
+
+```properties
+sdk.dir=/Users/<你的用户名>/Library/Android/sdk
+```
+
+完成后可执行：
+
+```bash
+npm run android:assemble
+npm run android
+```
+
+## 已修复的兼容性问题
+
+1. `run-ios` 在当前终端环境无法自动启动 Metro：已提供 `start:ios + ios:sim` 双命令方案
+2. iOS bundle 命令可能触发 Metro `EMFILE: too many open files`：新增 `bundle:ios`（`CI=1`）稳定通过
+
+## 服务端说明（可选）
+
+`account-app-server` 是后续在线化预留。当前离线版记账功能不依赖它。
+
+如需运行服务端：
+
+```bash
+cd account-app-server
+mvn spring-boot:run
+```
+
+SQLite 数据文件默认在：
 
 ```text
 account-app-server/data/account.db
 ```
-
-## 后续上线建议
-
-如果你后面准备把离线版升级成可上线版本，建议按这个顺序推进：
-
-1. 先补全 `account-app-server` 的 repository / service 实现，把现在的骨架接口接上 SQLite。
-2. 把 `account-app-rn/src/api/*` 从本地 store 调用切换成 `fetch` 请求。
-3. 登录态从本地 token 占位改成 JWT。
-4. 再考虑云端部署、数据备份、导出和多设备同步。

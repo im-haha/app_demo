@@ -1,0 +1,81 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require 'fileutils'
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+local_vendor_root = File.expand_path('./vendor-podsrc', __dir__)
+
+double_conversion_local = File.join(local_vendor_root, 'DoubleConversion')
+set_double_conversion_config({git: "file://#{double_conversion_local}"}) if File.directory?(double_conversion_local)
+
+folly_local = File.join(local_vendor_root, 'RCT-Folly')
+set_folly_config({git: "file://#{folly_local}"}) if File.directory?(folly_local)
+
+boost_local = File.join(local_vendor_root, 'boost')
+set_boost_config({git: "file://#{boost_local}"}) if File.directory?(boost_local)
+
+fmt_local = File.join(local_vendor_root, 'fmt')
+set_fmt_config({git: "file://#{fmt_local}"}) if File.directory?(fmt_local)
+
+glog_local = File.join(local_vendor_root, 'glog')
+set_glog_config({git: "file://#{glog_local}"}) if File.directory?(glog_local)
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'AccountAppShell076' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => false,
+    :new_arch_enabled => false,
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  target 'AccountAppShell076Tests' do
+    inherit! :complete
+    # Pods for testing
+  end
+
+  post_install do |installer|
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      # :ccache_enabled => true
+    )
+
+    folly_source_root = if File.directory?(folly_local)
+      File.join(folly_local, 'folly')
+    else
+      File.join(installer.sandbox.root.to_s, 'RCT-Folly', 'folly')
+    end
+    if Dir.exist?(folly_source_root)
+      sync_targets = [File.join(installer.sandbox.root.to_s, 'RCT-Folly', 'folly')]
+
+      %w[Public Private].each do |visibility|
+        folly_headers_root = File.join(installer.sandbox.root.to_s, 'Headers', visibility, 'RCT-Folly', 'folly')
+        next unless Dir.exist?(folly_headers_root)
+        sync_targets << folly_headers_root
+      end
+
+      sync_targets.each do |target_root|
+        FileUtils.rm_rf(target_root)
+        FileUtils.mkdir_p(target_root)
+        FileUtils.cp_r(Dir.glob(File.join(folly_source_root, '*')), target_root)
+      end
+    end
+  end
+end

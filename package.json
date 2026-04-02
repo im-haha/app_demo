@@ -1,0 +1,9 @@
+{
+  "name": "app-demo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix account-app-rn && npm install --prefix account-app-mp && npm install --prefix account-app-shared",
+    "postinstall": "npm run install:all"
+  }
+}

@@ -1,11 +1,12 @@
 # 记账 App（离线优先）
 
-仓库包含两部分：
+仓库包含以下项目：
 
 - `account-app-rn`：React Native 客户端（离线可用，当前主用）
 - `account-app-server`：Spring Boot + SQLite 服务端骨架（后续联网同步可接入）
 - `account-app-shared`：多端共享业务层（类型、离线业务规则）
 - `account-app-mp`：微信小程序端（方案 A 第一版）
+- `account-app-web`：Web App 端（离线优先，可切换后端模式）
 
 ## 依赖安装（根目录一键）
 
@@ -20,6 +21,7 @@ npm install
 - `account-app-rn`
 - `account-app-mp`
 - `account-app-shared`
+- `account-app-web`
 
 ## 前后端快速启动命令
 
@@ -54,6 +56,29 @@ npm run dev:weapp
 然后在微信开发者工具中导入 `account-app-mp/dist` 目录进行模拟器/真机预览调试。
 
 说明：当前小程序端的共享逻辑位于 `account-app-mp/src/shared`（与 `account-app-shared` 同源结构），用于规避 Taro 对外部 TS 目录的打包限制。
+
+### 前端（Web App）
+
+推荐在仓库根目录直接启动：
+
+```bash
+npm run dev:web
+```
+
+或进入 Web 项目目录启动：
+
+```bash
+cd account-app-web
+npm install
+npm run dev
+```
+
+默认离线模式（`VITE_DATA_MODE=local`）。如需切后端模式，配置：
+
+```bash
+VITE_DATA_MODE=remote
+VITE_API_BASE_URL=http://localhost:8080/api
+```
 
 ### 后端（Spring Boot）
 

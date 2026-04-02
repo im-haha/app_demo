@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "install:all": "npm install --prefix account-app-rn && npm install --prefix account-app-mp && npm install --prefix account-app-shared",
+    "install:all": "npm install --prefix account-app-rn && npm install --prefix account-app-mp && npm install --prefix account-app-shared && npm install --prefix account-app-web",
+    "dev:web": "npm run dev --prefix account-app-web",
+    "build:web": "npm run build --prefix account-app-web",
     "postinstall": "npm run install:all"
   }
 }

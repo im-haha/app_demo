@@ -2,6 +2,17 @@
   "name": "account-app-mp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.20.0 <21",
+    "npm": ">=10.8.2 <11"
+  },
+  "overrides": {
+    "dayjs": "$dayjs",
+    "react": "$react",
+    "react-dom": "$react-dom",
+    "typescript": "$typescript"
+  },
   "scripts": {
     "dev:weapp": "taro build --type weapp --watch",
     "build:weapp": "taro build --type weapp"

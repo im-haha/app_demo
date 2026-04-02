@@ -2,6 +2,16 @@
   "name": "AccountApp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20.20.0 <21",
+    "npm": ">=10.8.2 <11"
+  },
+  "overrides": {
+    "dayjs": "$dayjs",
+    "react": "$react",
+    "typescript": "$typescript"
+  },
   "scripts": {
     "android": "react-native run-android",
     "android:assemble": "cd android && ./gradlew assembleDebug",

@@ -23,6 +23,38 @@ npm install
 - `account-app-shared`
 - `account-app-web`
 
+## 多包管理（当前）
+
+当前采用“子项目独立 `package-lock.json` + 根目录脚本聚合”的方式，适合 RN / 小程序 / Web 并行维护，且不会强耦合到单一包管理器工作区。
+
+版本约束与漂移控制：
+
+- Node / npm 版本锁定：根目录 `.nvmrc` 与 `package.json#engines`（`node 20.20.x`、`npm 10.8.x`）
+- 包管理器锁定：`packageManager=npm@10.8.2`
+- 关键依赖统一：通过各项目 `overrides` 固定 `react/react-dom/dayjs/typescript` 等版本，减少子项目漂移
+
+根目录常用命令：
+
+```bash
+npm run bootstrap       # 安装所有前端子项目依赖
+npm run dev:rn          # 启动 RN Metro
+npm run dev:mp          # 启动小程序开发构建
+npm run dev:web         # 启动 Web 开发服务
+npm run build:mp        # 构建小程序
+npm run build:web       # 构建 Web
+npm run report:web      # 输出 Web 资源 raw/gzip/brotli 体积报告
+npm run typecheck:rn    # RN 类型检查
+npm run typecheck:web   # Web 类型检查
+```
+
+## CI 质量门禁
+
+已新增统一 CI（`.github/workflows/ci-quality.yml`），默认校验：
+
+1. `typecheck:rn`
+2. `build:mp`
+3. `report:web`（包含 Web 构建、体积预算门禁、gzip/brotli 报告）
+
 ## 前后端快速启动命令
 
 ### 前端（React Native，iOS 模拟器）

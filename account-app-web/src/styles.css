@@ -273,6 +273,12 @@ p {
   gap: 12px;
 }
 
+.panel-loading {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+}
+
 .hero-card {
   background: linear-gradient(135deg, var(--primary) 0%, #2a6263 100%);
   color: #fff;

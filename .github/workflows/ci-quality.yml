@@ -1,0 +1,49 @@
+name: CI Quality Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+      - feature/**
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            account-app-rn/package-lock.json
+            account-app-mp/package-lock.json
+            account-app-shared/package-lock.json
+            account-app-web/package-lock.json
+
+      - name: Install root deps (without scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Bootstrap sub projects
+        run: npm run bootstrap
+
+      - name: RN typecheck
+        run: npm run typecheck:rn
+
+      - name: Mini Program build
+        run: npm run build:mp
+
+      - name: Web bundle gate (build + budget + report)
+        run: npm run report:web

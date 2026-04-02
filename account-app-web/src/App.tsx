@@ -1,9 +1,17 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Suspense, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import dayjs from 'dayjs';
 import {
-  formatCurrency,
-  formatDateTime,
-  formatSignedCurrency,
+  AuthPanelLazy,
+  BillsPanelLazy,
+  HomePanelLazy,
+  MinePanelLazy,
+  prefetchAuthedRoutes,
+  prefetchByTabIntent,
+  prefetchUnauthedRoutes,
+  type WebTabKey,
+} from '@/modules/lazy';
+import {warmupApiOrigin} from '@/performance/networkHints';
+import {
   type BillInput,
   type BillRecord,
   type BillType,
@@ -15,7 +23,7 @@ import {appClient} from '@/api';
 import {DATA_MODE, API_BASE_URL} from '@/api/config';
 
 type AuthMode = 'LOGIN' | 'REGISTER';
-type TabKey = 'home' | 'bills' | 'mine';
+type TabKey = WebTabKey;
 type FilterType = BillType | 'ALL';
 type NoticeTone = 'success' | 'error';
 
@@ -46,10 +54,20 @@ function getErrorMessage(error: unknown, fallback = '操作失败，请稍后重
   if (error instanceof Error && error.message) {
     return error.message;
   }
+
   if (typeof error === 'string' && error.trim()) {
     return error;
   }
+
   return fallback;
+}
+
+function PanelFallback(): React.JSX.Element {
+  return (
+    <section className="card-like panel-loading">
+      <p className="muted">页面加载中...</p>
+    </section>
+  );
 }
 
 export default function App(): React.JSX.Element {
@@ -103,6 +121,7 @@ export default function App(): React.JSX.Element {
     if (noticeTimerRef.current) {
       window.clearTimeout(noticeTimerRef.current);
     }
+
     noticeTimerRef.current = window.setTimeout(() => {
       setNotice(null);
       noticeTimerRef.current = null;
@@ -157,7 +176,7 @@ export default function App(): React.JSX.Element {
     async (filterType: FilterType) => {
       await Promise.all([loadHomeData(), loadBillsData(filterType)]);
     },
-    [loadBillsData, loadHomeData],
+    [loadHomeData, loadBillsData],
   );
 
   const clearLoginState = useCallback(() => {
@@ -167,13 +186,34 @@ export default function App(): React.JSX.Element {
   }, [resetAuthedData]);
 
   useEffect(() => {
+    if (DATA_MODE === 'remote') {
+      warmupApiOrigin(API_BASE_URL);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
+    if (isAuthenticated) {
+      prefetchAuthedRoutes(activeTab);
+      return;
+    }
+
+    prefetchUnauthedRoutes();
+  }, [activeTab, isAuthenticated, ready]);
+
+  useEffect(() => {
     let mounted = true;
 
     const bootstrap = async (): Promise<void> => {
       setBusy(true);
+
       try {
         await appClient.initialize();
         const nextSession = await appClient.getSession();
+
         if (!mounted) {
           return;
         }
@@ -228,6 +268,7 @@ export default function App(): React.JSX.Element {
         pushNotice('error', '请输入昵称');
         return;
       }
+
       if (password !== confirmPassword) {
         pushNotice('error', '两次密码不一致');
         return;
@@ -382,6 +423,7 @@ export default function App(): React.JSX.Element {
       if (!nextUser) {
         throw new Error('保存失败');
       }
+
       setUser(nextUser);
       setNicknameDraft(nextUser.nickname);
       pushNotice('success', '昵称已更新');
@@ -394,6 +436,10 @@ export default function App(): React.JSX.Element {
 
   const openHomeFromBills = useCallback(() => {
     setActiveTab('home');
+  }, []);
+
+  const warmTab = useCallback((tab: TabKey) => {
+    prefetchByTabIntent(tab);
   }, []);
 
   if (!ready) {
@@ -412,85 +458,25 @@ export default function App(): React.JSX.Element {
       {notice ? <div className={`notice notice-${notice.tone}`}>{notice.text}</div> : null}
 
       {!isAuthenticated ? (
-        <section className="auth-layout">
-          <article className="auth-card card-like">
-            <header className="auth-header">
-              <p className="eyebrow">离线优先 · Web</p>
-              <h1>你的跨端账本</h1>
-              <p>
-                当前运行模式：
-                <strong>{DATA_MODE === 'local' ? '本地离线' : '后端接口'}</strong>
-              </p>
-            </header>
-
-            <div className="auth-mode-row">
-              <button
-                className={`ghost-btn ${authMode === 'LOGIN' ? 'is-active' : ''}`}
-                onClick={() => setAuthMode('LOGIN')}>
-                登录
-              </button>
-              <button
-                className={`ghost-btn ${authMode === 'REGISTER' ? 'is-active' : ''}`}
-                onClick={() => setAuthMode('REGISTER')}>
-                注册
-              </button>
-            </div>
-
-            {authMode === 'REGISTER' ? (
-              <label className="field">
-                <span>昵称</span>
-                <input
-                  value={nickname}
-                  onChange={event => setNickname(event.target.value)}
-                  placeholder="输入昵称"
-                  autoComplete="nickname"
-                />
-              </label>
-            ) : null}
-
-            <label className="field">
-              <span>用户名</span>
-              <input
-                value={username}
-                onChange={event => setUsername(event.target.value)}
-                placeholder="至少 3 位"
-                autoComplete="username"
-              />
-            </label>
-
-            <label className="field">
-              <span>密码</span>
-              <input
-                type="password"
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                placeholder="至少 6 位"
-                autoComplete={authMode === 'LOGIN' ? 'current-password' : 'new-password'}
-              />
-            </label>
-
-            {authMode === 'REGISTER' ? (
-              <label className="field">
-                <span>确认密码</span>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={event => setConfirmPassword(event.target.value)}
-                  placeholder="再次输入密码"
-                  autoComplete="new-password"
-                />
-              </label>
-            ) : null}
-
-            <button className="primary-btn" onClick={handleAuthSubmit} disabled={authSubmitting}>
-              {authSubmitting
-                ? '提交中...'
-                : authMode === 'LOGIN'
-                  ? '登录并进入'
-                  : '注册并进入'}
-            </button>
-          </article>
-        </section>
+        <Suspense fallback={<PanelFallback />}>
+          <AuthPanelLazy
+            authMode={authMode}
+            setAuthMode={setAuthMode}
+            nickname={nickname}
+            setNickname={setNickname}
+            username={username}
+            setUsername={setUsername}
+            password={password}
+            setPassword={setPassword}
+            confirmPassword={confirmPassword}
+            setConfirmPassword={setConfirmPassword}
+            authSubmitting={authSubmitting}
+            onSubmit={() => {
+              void handleAuthSubmit();
+            }}
+            dataMode={DATA_MODE}
+          />
+        </Suspense>
       ) : (
         <>
           <header className="top-banner card-like">
@@ -510,218 +496,82 @@ export default function App(): React.JSX.Element {
           <nav className="tab-nav">
             <button
               className={`tab-btn ${activeTab === 'home' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('home')}>
+              onClick={() => setActiveTab('home')}
+              onMouseEnter={() => warmTab('home')}
+              onFocus={() => warmTab('home')}>
               首页
             </button>
             <button
               className={`tab-btn ${activeTab === 'bills' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('bills')}>
+              onClick={() => setActiveTab('bills')}
+              onMouseEnter={() => warmTab('bills')}
+              onFocus={() => warmTab('bills')}>
               账单
             </button>
             <button
               className={`tab-btn ${activeTab === 'mine' ? 'is-active' : ''}`}
-              onClick={() => setActiveTab('mine')}>
+              onClick={() => setActiveTab('mine')}
+              onMouseEnter={() => warmTab('mine')}
+              onFocus={() => warmTab('mine')}>
               我的
             </button>
           </nav>
 
-          {activeTab === 'home' ? (
-            <section className="panel-grid">
-              <article className="hero-card">
-                <p className="hero-greet">你好，{user?.nickname ?? '你'}</p>
-                <h2>{formatSignedCurrency(overview.monthBalance)}</h2>
-                <p className="hero-note">
-                  本月预算使用：{formatCurrency(budget.spentAmount)} / {formatCurrency(budget.budgetAmount)}
-                </p>
-              </article>
+          <Suspense fallback={<PanelFallback />}>
+            {activeTab === 'home' ? (
+              <HomePanelLazy
+                user={user}
+                overview={overview}
+                budget={budget}
+                recentBills={recentBills}
+                categoryNameMap={categoryNameMap}
+                onOpenBills={() => setActiveTab('bills')}
+              />
+            ) : null}
 
-              <div className="stat-grid">
-                <article className="card-like stat-card">
-                  <span className="muted">今日支出</span>
-                  <strong>{formatCurrency(overview.todayExpense)}</strong>
-                </article>
-                <article className="card-like stat-card">
-                  <span className="muted">今日收入</span>
-                  <strong>{formatCurrency(overview.todayIncome)}</strong>
-                </article>
-                <article className="card-like stat-card">
-                  <span className="muted">本月支出</span>
-                  <strong>{formatCurrency(overview.monthExpense)}</strong>
-                </article>
-                <article className="card-like stat-card">
-                  <span className="muted">本月收入</span>
-                  <strong>{formatCurrency(overview.monthIncome)}</strong>
-                </article>
-              </div>
+            {activeTab === 'bills' ? (
+              <BillsPanelLazy
+                refreshing={refreshing}
+                bills={bills}
+                billFilterType={billFilterType}
+                onChangeBillFilter={type => {
+                  void handleChangeBillFilter(type);
+                }}
+                newBillType={newBillType}
+                setNewBillType={setNewBillType}
+                amount={amount}
+                setAmount={setAmount}
+                remark={remark}
+                setRemark={setRemark}
+                onAddBill={() => {
+                  void handleAddBill();
+                }}
+                onDeleteBill={billId => {
+                  void handleDeleteBill(billId);
+                }}
+                categoryNameMap={categoryNameMap}
+                onBackHome={openHomeFromBills}
+              />
+            ) : null}
 
-              <article className="card-like">
-                <div className="section-head">
-                  <h3>最近账单</h3>
-                  <button className="text-btn" onClick={() => setActiveTab('bills')}>
-                    查看全部
-                  </button>
-                </div>
-                {recentBills.length === 0 ? (
-                  <p className="muted">还没有账单，去账单页先记一笔。</p>
-                ) : (
-                  <div className="bill-list">
-                    {recentBills.map(bill => (
-                      <article className="bill-item" key={bill.id}>
-                        <div className="bill-row">
-                          <span>{categoryNameMap.get(bill.categoryId) ?? '未分类'}</span>
-                          <strong>{bill.type === 'INCOME' ? '+' : '-'}{formatCurrency(bill.amount)}</strong>
-                        </div>
-                        <div className="bill-row muted small">
-                          <span>{bill.remark || '无备注'}</span>
-                          <span>{formatDateTime(bill.billTime)}</span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </article>
-            </section>
-          ) : null}
-
-          {activeTab === 'bills' ? (
-            <section className="panel-grid">
-              <article className="card-like">
-                <div className="section-head">
-                  <h3>账单筛选</h3>
-                  <span className="muted small">{refreshing ? '刷新中...' : `共 ${bills.length} 条`}</span>
-                </div>
-
-                <div className="inline-buttons">
-                  {(['ALL', 'EXPENSE', 'INCOME'] as FilterType[]).map(type => (
-                    <button
-                      key={type}
-                      className={`ghost-btn ${billFilterType === type ? 'is-active' : ''}`}
-                      onClick={() => {
-                        void handleChangeBillFilter(type);
-                      }}>
-                      {type === 'ALL' ? '全部' : type === 'EXPENSE' ? '支出' : '收入'}
-                    </button>
-                  ))}
-                </div>
-              </article>
-
-              <article className="card-like">
-                <h3>快速新增</h3>
-
-                <div className="inline-buttons compact-gap">
-                  <button
-                    className={`ghost-btn ${newBillType === 'EXPENSE' ? 'is-active' : ''}`}
-                    onClick={() => setNewBillType('EXPENSE')}>
-                    支出
-                  </button>
-                  <button
-                    className={`ghost-btn ${newBillType === 'INCOME' ? 'is-active' : ''}`}
-                    onClick={() => setNewBillType('INCOME')}>
-                    收入
-                  </button>
-                </div>
-
-                <div className="field-grid">
-                  <label className="field">
-                    <span>金额</span>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={event => setAmount(event.target.value)}
-                      placeholder="例如 35.5"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>备注（可选）</span>
-                    <input
-                      value={remark}
-                      onChange={event => setRemark(event.target.value)}
-                      placeholder="例如：早餐 / 打车"
-                    />
-                  </label>
-                </div>
-
-                <button className="primary-btn" onClick={() => void handleAddBill()} disabled={refreshing}>
-                  新增账单
-                </button>
-              </article>
-
-              <article className="card-like">
-                <div className="section-head">
-                  <h3>账单列表</h3>
-                  <button className="text-btn" onClick={openHomeFromBills}>
-                    回首页
-                  </button>
-                </div>
-
-                {bills.length === 0 ? (
-                  <p className="muted">暂无账单，先添加一笔试试。</p>
-                ) : (
-                  <div className="bill-list">
-                    {bills.map(bill => (
-                      <article className="bill-item" key={bill.id}>
-                        <div className="bill-row">
-                          <span>{categoryNameMap.get(bill.categoryId) ?? '未分类'}</span>
-                          <strong>{bill.type === 'INCOME' ? '+' : '-'}{formatCurrency(bill.amount)}</strong>
-                        </div>
-                        <div className="bill-row muted small">
-                          <span>{bill.remark || '无备注'}</span>
-                          <span>{bill.accountType}</span>
-                        </div>
-                        <div className="bill-row muted small">
-                          <span>{formatDateTime(bill.billTime)}</span>
-                          <button className="danger-btn" onClick={() => void handleDeleteBill(bill.id)}>
-                            删除
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </article>
-            </section>
-          ) : null}
-
-          {activeTab === 'mine' ? (
-            <section className="panel-grid">
-              <article className="card-like">
-                <h3>{user?.nickname ?? '未登录用户'}</h3>
-                <p className="muted">@{user?.username ?? '-'}</p>
-                <p className="muted small">
-                  数据模式：{DATA_MODE} ｜ 接口地址：{API_BASE_URL}
-                </p>
-              </article>
-
-              <article className="card-like">
-                <h3>个人设置</h3>
-                <label className="field">
-                  <span>昵称</span>
-                  <input
-                    value={nicknameDraft}
-                    onChange={event => setNicknameDraft(event.target.value)}
-                    placeholder="输入新的昵称"
-                  />
-                </label>
-                <div className="inline-buttons compact-gap">
-                  <button
-                    className="primary-btn"
-                    onClick={() => void handleSaveNickname()}
-                    disabled={profileSaving}>
-                    {profileSaving ? '保存中...' : '保存昵称'}
-                  </button>
-                  <button className="ghost-btn" onClick={() => setActiveTab('home')}>
-                    回首页
-                  </button>
-                </div>
-              </article>
-
-              <article className="card-like">
-                <button className="danger-btn" onClick={() => void handleLogout()}>
-                  退出登录
-                </button>
-              </article>
-            </section>
-          ) : null}
+            {activeTab === 'mine' ? (
+              <MinePanelLazy
+                user={user}
+                dataMode={DATA_MODE}
+                apiBaseUrl={API_BASE_URL}
+                nicknameDraft={nicknameDraft}
+                setNicknameDraft={setNicknameDraft}
+                onSaveNickname={() => {
+                  void handleSaveNickname();
+                }}
+                profileSaving={profileSaving}
+                onBackHome={() => setActiveTab('home')}
+                onLogout={() => {
+                  void handleLogout();
+                }}
+              />
+            ) : null}
+          </Suspense>
         </>
       )}
     </main>

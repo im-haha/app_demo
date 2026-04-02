@@ -1,0 +1,35 @@
+.mine-profile {
+  margin-bottom: 16px;
+}
+
+.mine-name {
+  font-size: 38px;
+  font-weight: 700;
+}
+
+.mine-username {
+  margin-top: 8px;
+}
+
+.mine-section {
+  margin-top: 8px;
+}
+
+.mine-input {
+  margin-top: 8px;
+  background: #f7f2e7;
+  border-radius: 14px;
+  padding: 16px 14px;
+  box-sizing: border-box;
+}
+
+.mine-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.mine-action {
+  flex: 1;
+}

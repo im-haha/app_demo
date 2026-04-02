@@ -1,0 +1,62 @@
+.home-hero {
+  background: #1d4d4f;
+  border-radius: 24px;
+  padding: 24px;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+}
+
+.home-hero-title {
+  color: #ffffff;
+  font-size: 30px;
+  margin-bottom: 10px;
+}
+
+.home-hero-balance {
+  color: #ffffff;
+  font-size: 52px;
+  font-weight: 700;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.home-grid-item {
+  background: #fffdf8;
+  border-radius: 18px;
+  padding: 14px;
+  box-sizing: border-box;
+}
+
+.home-section-title {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.home-bill-item {
+  padding: 14px 0;
+  border-bottom: 1px solid #ece5d8;
+}
+
+.home-bill-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.home-action {
+  flex: 1;
+}

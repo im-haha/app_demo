@@ -1,0 +1,60 @@
+.bills-toolbar {
+  background: #fffdf8;
+  border-radius: 20px;
+  padding: 16px;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+}
+
+.bills-filter-row {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.bills-filter-btn {
+  flex: 1;
+}
+
+.bills-form-row {
+  margin-bottom: 10px;
+}
+
+.bills-input {
+  margin-top: 8px;
+  background: #f7f2e7;
+  border-radius: 14px;
+  padding: 16px 14px;
+  box-sizing: border-box;
+}
+
+.bills-submit {
+  margin-top: 8px;
+}
+
+.bills-item {
+  background: #fffdf8;
+  border-radius: 18px;
+  padding: 14px;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.bills-item-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bills-item-note {
+  margin-top: 6px;
+}
+
+.bills-item-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+}

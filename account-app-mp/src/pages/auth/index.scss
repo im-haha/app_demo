@@ -1,0 +1,39 @@
+.auth-header {
+  margin-bottom: 20px;
+}
+
+.auth-title {
+  font-size: 44px;
+  font-weight: 700;
+}
+
+.auth-subtitle {
+  margin-top: 8px;
+}
+
+.auth-mode-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.auth-mode-btn {
+  flex: 1;
+}
+
+.auth-field {
+  margin-bottom: 14px;
+}
+
+.auth-input {
+  margin-top: 8px;
+  background: #f7f2e7;
+  border-radius: 16px;
+  padding: 18px 16px;
+  box-sizing: border-box;
+}
+
+.auth-submit {
+  margin-top: 8px;
+}

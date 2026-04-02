@@ -3,6 +3,7 @@ import Taro, {useDidShow} from '@tarojs/taro';
 import {Button, Input, Text, View} from '@tarojs/components';
 import type {UserProfile} from '@/shared';
 import {getCurrentUserLocal, logoutLocal, updateProfileNickname} from '@/services/appData';
+import {safeReLaunch, safeShowToast} from '@/utils/taroSafe';
 import './index.scss';
 
 export default function MinePage(): React.JSX.Element {
@@ -13,7 +14,7 @@ export default function MinePage(): React.JSX.Element {
   const loadUser = useCallback(async () => {
     const currentUser = getCurrentUserLocal();
     if (!currentUser) {
-      await Taro.reLaunch({url: '/pages/auth/index'});
+      await safeReLaunch('/pages/auth/index');
       return;
     }
     setUser(currentUser);
@@ -21,7 +22,9 @@ export default function MinePage(): React.JSX.Element {
   }, []);
 
   useDidShow(() => {
-    loadUser();
+    void loadUser().catch(error => {
+      console.warn('[mine] loadUser failed:', error);
+    });
   });
 
   async function handleSaveNickname(): Promise<void> {
@@ -29,16 +32,16 @@ export default function MinePage(): React.JSX.Element {
       return;
     }
     if (!nickname.trim()) {
-      await Taro.showToast({title: '昵称不能为空', icon: 'none'});
+      await safeShowToast({title: '昵称不能为空', icon: 'none'});
       return;
     }
     try {
       setSaving(true);
       const nextUser = updateProfileNickname(nickname);
       setUser(nextUser);
-      await Taro.showToast({title: '已保存', icon: 'success'});
+      await safeShowToast({title: '已保存', icon: 'success'});
     } catch (error: any) {
-      await Taro.showToast({
+      await safeShowToast({
         title: error?.message ?? '保存失败',
         icon: 'none',
       });
@@ -49,8 +52,8 @@ export default function MinePage(): React.JSX.Element {
 
   async function handleLogout(): Promise<void> {
     logoutLocal();
-    await Taro.showToast({title: '已退出', icon: 'success'});
-    await Taro.reLaunch({url: '/pages/auth/index'});
+    await safeShowToast({title: '已退出', icon: 'success'});
+    await safeReLaunch('/pages/auth/index');
   }
 
   return (

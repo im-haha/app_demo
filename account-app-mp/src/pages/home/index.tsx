@@ -12,6 +12,7 @@ import {
   getRecentBills,
   initializeLocalState,
 } from '@/services/appData';
+import {safeReLaunch} from '@/utils/taroSafe';
 import './index.scss';
 
 const EMPTY_OVERVIEW: OverviewStats = {
@@ -35,7 +36,7 @@ export default function HomePage(): React.JSX.Element {
     initializeLocalState();
     const currentUser = getCurrentUserLocal();
     if (!currentUser) {
-      await Taro.reLaunch({url: '/pages/auth/index'});
+      await safeReLaunch('/pages/auth/index');
       return;
     }
 
@@ -52,7 +53,9 @@ export default function HomePage(): React.JSX.Element {
   }, [month]);
 
   useDidShow(() => {
-    loadData();
+    void loadData().catch(error => {
+      console.warn('[home] loadData failed:', error);
+    });
   });
 
   const categoryNameMap = useMemo(() => {

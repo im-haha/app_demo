@@ -12,6 +12,7 @@ import {
   getCurrentUserLocal,
   initializeLocalState,
 } from '@/services/appData';
+import {safeReLaunch, safeShowToast} from '@/utils/taroSafe';
 import './index.scss';
 
 export default function BillsPage(): React.JSX.Element {
@@ -27,7 +28,7 @@ export default function BillsPage(): React.JSX.Element {
     initializeLocalState();
     const currentUser = getCurrentUserLocal();
     if (!currentUser) {
-      await Taro.reLaunch({url: '/pages/auth/index'});
+      await safeReLaunch('/pages/auth/index');
       return;
     }
     setCategories(getCategoriesLocal());
@@ -39,7 +40,9 @@ export default function BillsPage(): React.JSX.Element {
   }, [type]);
 
   useDidShow(() => {
-    loadData();
+    void loadData().catch(error => {
+      console.warn('[bills] loadData failed:', error);
+    });
   });
 
   const categoryMap = useMemo(() => {
@@ -60,10 +63,10 @@ export default function BillsPage(): React.JSX.Element {
       addBillLocal(payload);
       setAmount('');
       setRemark('');
-      await Taro.showToast({title: '已添加', icon: 'success'});
+      await safeShowToast({title: '已添加', icon: 'success'});
       await loadData();
     } catch (error: any) {
-      await Taro.showToast({
+      await safeShowToast({
         title: error?.message ?? '添加失败',
         icon: 'none',
       });
@@ -73,15 +76,20 @@ export default function BillsPage(): React.JSX.Element {
   }
 
   async function handleDeleteBill(billId: number): Promise<void> {
-    const result = await Taro.showModal({
-      title: '删除账单',
-      content: '删除后不可恢复，是否继续？',
-    });
-    if (!result.confirm) {
-      return;
+    try {
+      const result = await Taro.showModal({
+        title: '删除账单',
+        content: '删除后不可恢复，是否继续？',
+      });
+      if (!result.confirm) {
+        return;
+      }
+      deleteBillLocal(billId);
+      await loadData();
+    } catch (error) {
+      console.warn('[bills] delete failed:', error);
+      await safeShowToast({title: '删除失败，请重试', icon: 'none'});
     }
-    deleteBillLocal(billId);
-    await loadData();
   }
 
   return (

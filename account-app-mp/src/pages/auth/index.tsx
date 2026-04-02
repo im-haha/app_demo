@@ -3,6 +3,7 @@ import Taro from '@tarojs/taro';
 import {Button, Input, Text, View} from '@tarojs/components';
 import type {LoginPayload, RegisterPayload} from '@/shared/types/user';
 import {loginLocal, registerLocal} from '@/services/appData';
+import {safeReLaunch, safeShowToast} from '@/utils/taroSafe';
 import './index.scss';
 
 type AuthMode = 'LOGIN' | 'REGISTER';
@@ -25,20 +26,20 @@ export default function AuthPage(): React.JSX.Element {
       return;
     }
     if (!username.trim()) {
-      Taro.showToast({title: '请输入用户名', icon: 'none'});
+      await safeShowToast({title: '请输入用户名', icon: 'none'});
       return;
     }
     if (!password.trim()) {
-      Taro.showToast({title: '请输入密码', icon: 'none'});
+      await safeShowToast({title: '请输入密码', icon: 'none'});
       return;
     }
     if (mode === 'REGISTER') {
       if (!nickname.trim()) {
-        Taro.showToast({title: '请输入昵称', icon: 'none'});
+        await safeShowToast({title: '请输入昵称', icon: 'none'});
         return;
       }
       if (password !== confirmPassword) {
-        Taro.showToast({title: '两次密码不一致', icon: 'none'});
+        await safeShowToast({title: '两次密码不一致', icon: 'none'});
         return;
       }
     }
@@ -52,10 +53,10 @@ export default function AuthPage(): React.JSX.Element {
         const payload: RegisterPayload = {username, password, nickname};
         registerLocal(payload);
       }
-      await Taro.showToast({title: '欢迎回来', icon: 'success'});
-      await Taro.reLaunch({url: '/pages/home/index'});
+      await safeShowToast({title: '欢迎回来', icon: 'success'});
+      await safeReLaunch('/pages/home/index');
     } catch (error: any) {
-      await Taro.showToast({
+      await safeShowToast({
         title: error?.message ?? '操作失败，请稍后重试',
         icon: 'none',
       });

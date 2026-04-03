@@ -803,6 +803,10 @@ export function listBills(
   const userId = ensureCurrentUserId(currentUserId);
   const keyword = filters?.keyword?.trim().toLowerCase();
   const merchantKeyword = filters?.merchantKeyword?.trim().toLowerCase();
+  const tagKeyword = filters?.tagKeyword?.trim().toLowerCase();
+  const sourceFilter = filters?.source;
+  const accountPerspectiveAccountId =
+    filters?.accountPerspectiveAccountId ?? null;
   const categoryNameMap = new Map<number, string>(
     data.categories.map(category => [category.id, category.name]),
   );
@@ -817,7 +821,11 @@ export function listBills(
         return true;
       }
 
-      if (filters.type && filters.type !== 'ALL' && bill.type !== filters.type) {
+      const effectiveType = resolveBillTypeForView(
+        bill,
+        accountPerspectiveAccountId,
+      );
+      if (filters.type && filters.type !== 'ALL' && effectiveType !== filters.type) {
         return false;
       }
 
@@ -825,7 +833,15 @@ export function listBills(
         return false;
       }
 
-      if (filters.accountId !== undefined && filters.accountId !== null && bill.accountId !== filters.accountId) {
+      if (accountPerspectiveAccountId !== null) {
+        if (!isBillRelatedToAccount(bill, accountPerspectiveAccountId)) {
+          return false;
+        }
+      } else if (
+        filters.accountId !== undefined &&
+        filters.accountId !== null &&
+        bill.accountId !== filters.accountId
+      ) {
         return false;
       }
 
@@ -858,6 +874,17 @@ export function listBills(
       }
 
       if (merchantKeyword && !(bill.merchant ?? '').toLowerCase().includes(merchantKeyword)) {
+        return false;
+      }
+
+      if (
+        tagKeyword &&
+        !(bill.tagNames ?? []).some(tag => tag.toLowerCase().includes(tagKeyword))
+      ) {
+        return false;
+      }
+
+      if (sourceFilter && sourceFilter !== 'ALL' && bill.source !== sourceFilter) {
         return false;
       }
 
@@ -903,6 +930,25 @@ function resolveLedgerDirection(
   return bill.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
 }
 
+function isBillRelatedToAccount(bill: BillRecord, accountId: number): boolean {
+  return bill.accountId === accountId || bill.transferTargetAccountId === accountId;
+}
+
+function resolveBillTypeForView(
+  bill: BillRecord,
+  accountPerspectiveAccountId?: number | null,
+): BillType {
+  if (!accountPerspectiveAccountId || !bill.isTransfer) {
+    return bill.type;
+  }
+  if (!isBillRelatedToAccount(bill, accountPerspectiveAccountId)) {
+    return bill.type;
+  }
+  return bill.transferTargetAccountId === accountPerspectiveAccountId
+    ? 'INCOME'
+    : 'EXPENSE';
+}
+
 export function listAccountLedger(
   data: PersistedAppData,
   currentUserId: number | null,
@@ -946,17 +992,22 @@ export function listBillSections(
   filters?: BillFilters,
 ): BillListSection[] {
   const bills = listBills(data, currentUserId, filters);
+  const accountPerspectiveAccountId = filters?.accountPerspectiveAccountId;
   const today = dayjs().format('YYYY-MM-DD');
   const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   const sectionMap = new Map<string, BillListSection>();
 
   bills.forEach(bill => {
+    const effectiveType = resolveBillTypeForView(
+      bill,
+      accountPerspectiveAccountId,
+    );
     const date = dayjs(bill.billTime).format('YYYY-MM-DD');
     const title = date === today ? '今天' : date === yesterday ? '昨天' : date;
     const section = sectionMap.get(date);
     if (section) {
       section.data.push(bill);
-      if (bill.type === 'INCOME') {
+      if (effectiveType === 'INCOME') {
         section.dayIncome += bill.amount;
       } else {
         section.dayExpense += bill.amount;
@@ -968,8 +1019,8 @@ export function listBillSections(
       title,
       date,
       data: [bill],
-      dayExpense: bill.type === 'EXPENSE' ? bill.amount : 0,
-      dayIncome: bill.type === 'INCOME' ? bill.amount : 0,
+      dayExpense: effectiveType === 'EXPENSE' ? bill.amount : 0,
+      dayIncome: effectiveType === 'INCOME' ? bill.amount : 0,
     });
   });
 

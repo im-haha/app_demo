@@ -73,6 +73,7 @@ export interface BillFilters {
   type?: BillType | 'ALL';
   categoryId?: number | null;
   accountId?: number | null;
+  accountPerspectiveAccountId?: number | null;
   startDate?: string;
   endDate?: string;
   keyword?: string;
@@ -82,6 +83,8 @@ export interface BillFilters {
   maxAmount?: number;
   month?: string;
   merchantKeyword?: string;
+  tagKeyword?: string;
+  source?: BillRecord['source'] | 'ALL';
 }
 
 export interface BillAdvancedFilters extends BillFilters {

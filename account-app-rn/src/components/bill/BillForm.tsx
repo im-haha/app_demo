@@ -41,6 +41,24 @@ function isValidClock(clockText: string): boolean {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(clockText);
 }
 
+function normalizeTagNames(input: string): string[] {
+  const normalized = input
+    .split(/[,，]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+  const deduplicated: string[] = [];
+  const seen = new Set<string>();
+  normalized.forEach(item => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    deduplicated.push(item);
+  });
+  return deduplicated.slice(0, 8);
+}
+
 export default function BillForm({
   initialValue,
   categories,
@@ -66,6 +84,10 @@ export default function BillForm({
     initialDate.isValid() ? initialDate.format('HH:mm') : dayjs().format('HH:mm'),
   );
   const [remark, setRemark] = useState(initialValue?.remark ?? '');
+  const [merchant, setMerchant] = useState(initialValue?.merchant ?? '');
+  const [tagInput, setTagInput] = useState(
+    initialValue?.tagNames?.join(', ') ?? '',
+  );
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
   const [transferMenuVisible, setTransferMenuVisible] = useState(false);
   const [recentCategoryByType, setRecentCategoryByType] = useState<CategoryMemory>({
@@ -272,8 +294,8 @@ export default function BillForm({
       remark: remark.trim(),
       source: initialValue?.source ?? 'MANUAL',
       accountId: selectedAccount.id,
-      merchant: initialValue?.merchant,
-      tagNames: initialValue?.tagNames,
+      merchant: billMode === 'NORMAL' ? merchant.trim() || undefined : undefined,
+      tagNames: billMode === 'NORMAL' ? normalizeTagNames(tagInput) : undefined,
       isTransfer: billMode === 'TRANSFER',
       transferTargetAccountId: billMode === 'TRANSFER' ? selectedTransferTarget?.id ?? null : null,
     });
@@ -283,14 +305,14 @@ export default function BillForm({
     billClock,
     billDate,
     billMode,
-    initialValue?.merchant,
     initialValue?.source,
-    initialValue?.tagNames,
+    merchant,
     onSubmit,
     remark,
     selectedAccount,
     selectedCategoryId,
     selectedTransferTarget,
+    tagInput,
     transferFallbackCategoryId,
     type,
   ]);
@@ -389,6 +411,30 @@ export default function BillForm({
               />
             ))}
           </Menu>
+        </View>
+      ) : null}
+
+      {billMode === 'NORMAL' ? (
+        <View style={{gap: 8}}>
+          <AppInput
+            label="商户（可选）"
+            value={merchant}
+            onChangeText={value => setMerchant(value.slice(0, 32))}
+            placeholder="例如：瑞幸咖啡 / 京东 / 滴滴出行"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <AppInput
+            label="标签（可选）"
+            value={tagInput}
+            onChangeText={value => setTagInput(value.slice(0, 80))}
+            placeholder="例如：工作餐, 通勤, 报销"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text variant="bodySmall" style={{opacity: 0.72}}>
+            多个标签请用英文逗号分隔，最多保留 8 个标签。
+          </Text>
         </View>
       ) : null}
 

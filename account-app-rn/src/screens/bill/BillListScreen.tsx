@@ -6,6 +6,7 @@ import {Text} from 'react-native-paper';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
+import AppInput from '@/components/common/AppInput';
 import SearchLineIcon from '@/components/common/icons/SearchLineIcon';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
@@ -25,6 +26,28 @@ import {formatCurrency} from '@/utils/format';
 import {BillFilters, BillListSection} from '@/types/bill';
 import {BillTimePreset, billTimePresetOptions, resolveTimeRange} from '@/utils/timeRange';
 
+function sanitizeAmountFilterInput(input: string): string {
+  const normalized = input.replace(/[^\d.]/g, '');
+  const [integerPart = '', decimalRaw = ''] = normalized.split('.');
+  const decimalPart = decimalRaw.slice(0, 2);
+  if (normalized.includes('.')) {
+    return `${integerPart}.${decimalPart}`;
+  }
+  return integerPart;
+}
+
+function parseAmountFilterValue(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return Number(parsed.toFixed(2));
+}
+
 export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
@@ -43,6 +66,13 @@ export default function BillListScreen(): React.JSX.Element {
   const [customEndDate, setCustomEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
+  const [merchantKeyword, setMerchantKeyword] = useState('');
+  const [tagKeyword, setTagKeyword] = useState('');
+  const [minAmountText, setMinAmountText] = useState('');
+  const [maxAmountText, setMaxAmountText] = useState('');
+  const [includeTransfers, setIncludeTransfers] = useState(true);
+  const [advancedVisible, setAdvancedVisible] = useState(false);
+  const [isAccountPerspectiveEnabled, setIsAccountPerspectiveEnabled] = useState(false);
   const [filterSwitchWidth, setFilterSwitchWidth] = useState(0);
   const typeIndex = useMemo(
     () => filterTypeOptions.findIndex(item => item.value === type),
@@ -91,12 +121,33 @@ export default function BillListScreen(): React.JSX.Element {
     () => resolveTimeRange(timePreset, customStartDate, customEndDate),
     [timePreset, customStartDate, customEndDate],
   );
+  const canUseAccountPerspective = selectedAccountId !== 'ALL';
+  const minAmount = useMemo(
+    () => parseAmountFilterValue(minAmountText),
+    [minAmountText],
+  );
+  const maxAmount = useMemo(
+    () => parseAmountFilterValue(maxAmountText),
+    [maxAmountText],
+  );
   const billFilters = useMemo<BillFilters>(
     () => ({
       type,
       keyword,
       categoryId: selectedCategoryId,
-      accountId: selectedAccountId === 'ALL' ? undefined : selectedAccountId,
+      merchantKeyword: merchantKeyword.trim() || undefined,
+      tagKeyword: tagKeyword.trim() || undefined,
+      minAmount,
+      maxAmount,
+      includeTransfers,
+      accountId:
+        isAccountPerspectiveEnabled || selectedAccountId === 'ALL'
+          ? undefined
+          : selectedAccountId,
+      accountPerspectiveAccountId:
+        isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
+          ? selectedAccountId
+          : undefined,
       ...(timePreset === 'THIS_MONTH'
         ? {month: dayjs().format('YYYY-MM')}
         : {
@@ -109,6 +160,12 @@ export default function BillListScreen(): React.JSX.Element {
       keyword,
       selectedCategoryId,
       selectedAccountId,
+      merchantKeyword,
+      tagKeyword,
+      minAmount,
+      maxAmount,
+      includeTransfers,
+      isAccountPerspectiveEnabled,
       timePreset,
       timeRange.endDate,
       timeRange.startDate,
@@ -139,16 +196,41 @@ export default function BillListScreen(): React.JSX.Element {
     if (selectedAccountId !== 'ALL') {
       summaryParts.push(selectedAccountName);
     }
+    if (isAccountPerspectiveEnabled && selectedAccountId !== 'ALL') {
+      summaryParts.push('账户视角: 转入/转出');
+    }
     if (keyword.trim()) {
       summaryParts.push(`关键词: ${keyword.trim()}`);
+    }
+    if (merchantKeyword.trim()) {
+      summaryParts.push(`商户: ${merchantKeyword.trim()}`);
+    }
+    if (tagKeyword.trim()) {
+      summaryParts.push(`标签: ${tagKeyword.trim()}`);
+    }
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      summaryParts.push(
+        `金额: ${formatCurrency(minAmount ?? 0)} ~ ${
+          maxAmount !== undefined ? formatCurrency(maxAmount) : '不限'
+        }`,
+      );
+    }
+    if (!includeTransfers) {
+      summaryParts.push('排除转账');
     }
     return summaryParts.join(' · ');
   }, [
     keyword,
+    merchantKeyword,
+    tagKeyword,
+    minAmount,
+    maxAmount,
+    includeTransfers,
     selectedAccountName,
     selectedAccountId,
     selectedCategoryId,
     selectedCategoryName,
+    isAccountPerspectiveEnabled,
     timeRange.label,
   ]);
 
@@ -175,6 +257,12 @@ export default function BillListScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [keywordInput]);
 
+  useEffect(() => {
+    if (!canUseAccountPerspective && isAccountPerspectiveEnabled) {
+      setIsAccountPerspectiveEnabled(false);
+    }
+  }, [canUseAccountPerspective, isAccountPerspectiveEnabled]);
+
   function handleTypeChange(nextType: 'ALL' | 'INCOME' | 'EXPENSE'): void {
     if (nextType === type) {
       return;
@@ -197,6 +285,24 @@ export default function BillListScreen(): React.JSX.Element {
     setCustomEndDate(dayjs().format('YYYY-MM-DD'));
     setSelectedCategoryId(null);
     setSelectedAccountId('ALL');
+    setMerchantKeyword('');
+    setTagKeyword('');
+    setMinAmountText('');
+    setMaxAmountText('');
+    setIncludeTransfers(true);
+    setAdvancedVisible(false);
+    setIsAccountPerspectiveEnabled(false);
+  }
+
+  function handleAccountPerspectiveToggle(enabled: boolean): void {
+    if (enabled && !canUseAccountPerspective) {
+      return;
+    }
+    if (enabled === isAccountPerspectiveEnabled) {
+      return;
+    }
+    segmentedSwitchHaptic();
+    setIsAccountPerspectiveEnabled(enabled);
   }
 
   function getFilterTextColor(itemType: 'ALL' | 'INCOME' | 'EXPENSE'): string {
@@ -266,7 +372,7 @@ export default function BillListScreen(): React.JSX.Element {
               <TextInput
                 value={keywordInput}
                 onChangeText={setKeywordInput}
-                placeholder="搜索备注/分类/金额/账户/日期"
+                placeholder="搜索备注/分类/商户/标签/金额/账户/日期"
                 placeholderTextColor={isDark ? '#95A4AA' : '#7A837D'}
                 style={{
                   flex: 1,
@@ -306,6 +412,150 @@ export default function BillListScreen(): React.JSX.Element {
                 </Pressable>
               ) : null}
             </View>
+          </View>
+
+          <View style={{gap: 8}}>
+            <Pressable
+              onPress={() => setAdvancedVisible(current => !current)}
+              style={{
+                borderRadius: 14,
+                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                更多筛选
+              </Text>
+              <Text variant="labelMedium" style={{color: colors.muted}}>
+                {advancedVisible ? '收起' : '展开'}
+              </Text>
+            </Pressable>
+            {advancedVisible ? (
+              <View
+                style={{
+                  borderRadius: 16,
+                  backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  gap: 10,
+                }}>
+                <AppInput
+                  label="商户关键词"
+                  placeholder="例如：京东 / 瑞幸 / 滴滴"
+                  value={merchantKeyword}
+                  onChangeText={setMerchantKeyword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <AppInput
+                  label="标签关键词"
+                  placeholder="例如：报销 / 通勤 / 工作餐"
+                  value={tagKeyword}
+                  onChangeText={setTagKeyword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={{flexDirection: 'row', gap: 8}}>
+                  <View style={{flex: 1}}>
+                    <AppInput
+                      label="最低金额"
+                      placeholder="0"
+                      value={minAmountText}
+                      onChangeText={value =>
+                        setMinAmountText(sanitizeAmountFilterInput(value))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <View style={{flex: 1}}>
+                    <AppInput
+                      label="最高金额"
+                      placeholder="不限"
+                      value={maxAmountText}
+                      onChangeText={value =>
+                        setMaxAmountText(sanitizeAmountFilterInput(value))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+                <View style={{gap: 8}}>
+                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                    转账口径
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      borderRadius: 999,
+                      padding: 2,
+                      backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
+                      alignSelf: 'flex-start',
+                    }}>
+                    <Pressable
+                      onPress={() => setIncludeTransfers(true)}
+                      style={{
+                        minWidth: 86,
+                        height: 30,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: includeTransfers
+                          ? isDark
+                            ? '#2A3544'
+                            : '#DFD2FF'
+                          : 'transparent',
+                      }}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: includeTransfers
+                            ? isDark
+                              ? '#EAF2F0'
+                              : '#213042'
+                            : colors.muted,
+                        }}>
+                        包含转账
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setIncludeTransfers(false)}
+                      style={{
+                        minWidth: 86,
+                        height: 30,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: includeTransfers
+                          ? 'transparent'
+                          : isDark
+                            ? '#2A3544'
+                            : '#DFD2FF',
+                      }}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: includeTransfers
+                            ? colors.muted
+                            : isDark
+                              ? '#EAF2F0'
+                              : '#213042',
+                        }}>
+                        排除转账
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
 
           <View style={{flexDirection: 'row', gap: 8}}>
@@ -425,6 +675,97 @@ export default function BillListScreen(): React.JSX.Element {
             ))}
           </View>
 
+          <View
+            style={{
+              borderRadius: 18,
+              backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              gap: 8,
+            }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                转账视角
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  borderRadius: 999,
+                  padding: 2,
+                  backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
+                }}>
+                <Pressable
+                  onPress={() => handleAccountPerspectiveToggle(false)}
+                  style={{
+                    minWidth: 66,
+                    height: 30,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isAccountPerspectiveEnabled
+                      ? 'transparent'
+                      : isDark
+                        ? '#2A3544'
+                        : '#DFD2FF',
+                  }}>
+                  <Text
+                    variant="labelMedium"
+                    style={{
+                      fontWeight: '700',
+                      color: isAccountPerspectiveEnabled
+                        ? colors.muted
+                        : isDark
+                          ? '#EAF2F0'
+                          : '#213042',
+                    }}>
+                    默认
+                  </Text>
+                </Pressable>
+                <Pressable
+                  disabled={!canUseAccountPerspective}
+                  onPress={() => handleAccountPerspectiveToggle(true)}
+                  style={{
+                    minWidth: 88,
+                    height: 30,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isAccountPerspectiveEnabled
+                      ? isDark
+                        ? '#2A3544'
+                        : '#DFD2FF'
+                      : 'transparent',
+                    opacity: canUseAccountPerspective ? 1 : 0.5,
+                  }}>
+                  <Text
+                    variant="labelMedium"
+                    style={{
+                      fontWeight: '700',
+                      color: isAccountPerspectiveEnabled
+                        ? isDark
+                          ? '#EAF2F0'
+                          : '#213042'
+                        : colors.muted,
+                    }}>
+                    账户视角
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              {canUseAccountPerspective
+                ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
+                : '先选择一个账户，再开启账户视角。'}
+            </Text>
+          </View>
+
           <FilterSummaryChips
             summaryText={activeFilterSummary}
             onClear={clearAllFilters}
@@ -446,6 +787,11 @@ export default function BillListScreen(): React.JSX.Element {
                 transferTargetAccountName={
                   item.transferTargetAccountId
                     ? accountNameMap.get(item.transferTargetAccountId)
+                    : undefined
+                }
+                accountPerspectiveAccountId={
+                  isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
+                    ? selectedAccountId
                     : undefined
                 }
                 onPress={() =>

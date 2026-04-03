@@ -11,6 +11,7 @@ function buildFiltersKey(filters?: BillFilters): string {
     type: filters.type ?? 'ALL',
     categoryId: filters.categoryId ?? null,
     accountId: filters.accountId ?? null,
+    accountPerspectiveAccountId: filters.accountPerspectiveAccountId ?? null,
     startDate: filters.startDate ?? null,
     endDate: filters.endDate ?? null,
     keyword: filters.keyword ?? null,
@@ -20,6 +21,8 @@ function buildFiltersKey(filters?: BillFilters): string {
     maxAmount: filters.maxAmount ?? null,
     month: filters.month ?? null,
     merchantKeyword: filters.merchantKeyword ?? null,
+    tagKeyword: filters.tagKeyword ?? null,
+    source: filters.source ?? 'ALL',
   });
 }
 

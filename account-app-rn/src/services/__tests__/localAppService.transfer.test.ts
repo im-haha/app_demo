@@ -2,6 +2,7 @@ import {
   createInitialAppData,
   getIncomeExpenseTotalsByRange,
   listAccountLedger,
+  listBillSections,
   listBills,
   registerUser,
   saveBill,
@@ -224,5 +225,110 @@ describe('localAppService transfer flow', () => {
           entry.signedAmount === 50,
       ),
     ).toBe(true);
+  });
+
+  it('supports account perspective filtering and section totals on bill list', () => {
+    const {data, userId, accounts, expenseCategory} = createUserData();
+    const sourceAccount = accounts[0];
+    const targetAccount = accounts[1];
+
+    let next = saveBill(
+      data,
+      userId,
+      buildPayload(sourceAccount, expenseCategory, {
+        amount: 120,
+        billTime: '2026-04-03 09:30:00',
+        isTransfer: true,
+        transferTargetAccountId: targetAccount.id,
+      }),
+    );
+    next = saveBill(
+      next,
+      userId,
+      buildPayload(targetAccount, expenseCategory, {
+        amount: 30,
+        billTime: '2026-04-03 10:30:00',
+        isTransfer: true,
+        transferTargetAccountId: sourceAccount.id,
+      }),
+    );
+    next = saveBill(
+      next,
+      userId,
+      buildPayload(targetAccount, expenseCategory, {
+        type: 'INCOME',
+        amount: 40,
+        billTime: '2026-04-03 11:30:00',
+        isTransfer: false,
+      }),
+    );
+
+    const targetIncomeBills = listBills(next, userId, {
+      type: 'INCOME',
+      accountPerspectiveAccountId: targetAccount.id,
+      month: '2026-04',
+    });
+    const targetExpenseBills = listBills(next, userId, {
+      type: 'EXPENSE',
+      accountPerspectiveAccountId: targetAccount.id,
+      month: '2026-04',
+    });
+    const targetAllBills = listBills(next, userId, {
+      accountPerspectiveAccountId: targetAccount.id,
+      month: '2026-04',
+    });
+    const sections = listBillSections(next, userId, {
+      type: 'ALL',
+      accountPerspectiveAccountId: targetAccount.id,
+      month: '2026-04',
+    });
+
+    expect(targetIncomeBills).toHaveLength(2);
+    expect(targetIncomeBills.every(item => item.type === 'INCOME' || item.isTransfer)).toBe(true);
+    expect(targetExpenseBills).toHaveLength(1);
+    expect(targetExpenseBills[0].isTransfer).toBe(true);
+    expect(targetAllBills).toHaveLength(3);
+    expect(sections).toHaveLength(1);
+    expect(sections[0].dayIncome).toBe(160);
+    expect(sections[0].dayExpense).toBe(30);
+  });
+
+  it('supports tag keyword and source filters for metadata search', () => {
+    const {data, userId, accounts, expenseCategory} = createUserData();
+    const sourceAccount = accounts[0];
+
+    let next = saveBill(
+      data,
+      userId,
+      buildPayload(sourceAccount, expenseCategory, {
+        amount: 45,
+        remark: '咖啡',
+        merchant: '瑞幸咖啡',
+        tagNames: ['工作餐', '通勤'],
+        source: 'MANUAL',
+      }),
+    );
+    next = saveBill(
+      next,
+      userId,
+      buildPayload(sourceAccount, expenseCategory, {
+        amount: 88,
+        remark: '地铁卡',
+        merchant: '地铁站',
+        tagNames: ['交通'],
+        source: 'IMPORT',
+      }),
+    );
+
+    const tagKeywordBills = listBills(next, userId, {tagKeyword: '通勤'});
+    const sourceImportBills = listBills(next, userId, {source: 'IMPORT'});
+    const sourceManualBills = listBills(next, userId, {source: 'MANUAL'});
+
+    expect(tagKeywordBills).toHaveLength(1);
+    expect(tagKeywordBills[0].merchant).toBe('瑞幸咖啡');
+    expect(sourceImportBills).toHaveLength(1);
+    expect(sourceImportBills[0].source).toBe('IMPORT');
+    expect(sourceManualBills.length).toBeGreaterThan(0);
+    expect(sourceManualBills.some(item => item.merchant === '瑞幸咖啡')).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import CashflowTrendCard from '@/components/stats/CashflowTrendCard';
 import CashflowTrendXLCard from '@/components/stats/xl/CashflowTrendXLCard';
 import CategoryDonutCard from '@/components/stats/CategoryDonutCard';
@@ -47,7 +48,7 @@ export default function StatsScreen(): React.JSX.Element {
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getTrendByRange = useAppStore(state => state.getTrendByRange);
   const getCategoryBreakdownByRange = useAppStore(state => state.getCategoryBreakdownByRange);
   const getPreviousPeriodTotalByRange = useAppStore(state => state.getPreviousPeriodTotalByRange);

@@ -21,11 +21,17 @@ import {defaultCategories} from '@/data/defaultCategories';
 import {buildStatsTrendPointsByRange} from '@/utils/statsDisplayData';
 import {normalizeDateRange} from '@/utils/timeRange';
 
+export interface LocalAuthCredential {
+  userId: number;
+  passwordHash: string;
+  updatedAt: string;
+}
+
 export interface PersistedAppData {
   schemaVersion: number;
   users: UserProfile[];
   currentUserId: number | null;
-  token: string | null;
+  authCredentials: LocalAuthCredential[];
   categories: Category[];
   accounts: Account[];
   bills: BillRecord[];
@@ -34,10 +40,10 @@ export interface PersistedAppData {
 
 export function createInitialAppData(): PersistedAppData {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     users: [],
     currentUserId: null,
-    token: null,
+    authCredentials: [],
     categories: defaultCategories,
     accounts: [],
     bills: [],
@@ -51,6 +57,86 @@ function nextId(items: Array<{id: number}>): number {
 
 function nowString(): string {
   return dayjs().format('YYYY-MM-DD HH:mm:ss');
+}
+
+export function normalizeUsername(username: string): string {
+  return username.trim();
+}
+
+export function hashLocalPassword(username: string, password: string): string {
+  const source = `account-app-local-auth-v1|${normalizeUsername(username).toLowerCase()}|${password}`;
+  let hashA = 0x811c9dc5;
+  let hashB = 0x811c9dc5;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    hashA ^= code;
+    hashA = Math.imul(hashA, 0x01000193) >>> 0;
+    hashB ^= source.charCodeAt(source.length - 1 - index);
+    hashB = Math.imul(hashB, 0x01000193) >>> 0;
+  }
+
+  return `${hashA.toString(16).padStart(8, '0')}${hashB.toString(16).padStart(8, '0')}`;
+}
+
+interface LegacyUserProfile extends UserProfile {
+  password?: string;
+}
+
+interface LegacyPersistedAppData extends Partial<PersistedAppData> {
+  users?: LegacyUserProfile[];
+  token?: string | null;
+}
+
+export function normalizePersistedAppData(input: LegacyPersistedAppData): PersistedAppData {
+  const categories = Array.isArray(input.categories) ? input.categories : defaultCategories;
+  const accounts = Array.isArray(input.accounts) ? input.accounts : [];
+  const bills = Array.isArray(input.bills) ? input.bills : [];
+  const budgets = Array.isArray(input.budgets) ? input.budgets : [];
+
+  const users: UserProfile[] = Array.isArray(input.users)
+    ? input.users.map(({password: _password, ...user}) => user)
+    : [];
+
+  const explicitCredentials = Array.isArray(input.authCredentials)
+    ? input.authCredentials.filter(
+        item =>
+          Number.isFinite(item.userId) &&
+          typeof item.passwordHash === 'string' &&
+          item.passwordHash.length > 0,
+      )
+    : [];
+  const knownCredentialUsers = new Set(explicitCredentials.map(item => item.userId));
+  const migratedLegacyCredentials: LocalAuthCredential[] = Array.isArray(input.users)
+    ? input.users
+        .filter(
+          item =>
+            typeof item.password === 'string' &&
+            item.password.length > 0 &&
+            !knownCredentialUsers.has(item.id),
+        )
+        .map(item => ({
+          userId: item.id,
+          passwordHash: hashLocalPassword(item.username, item.password as string),
+          updatedAt: item.updatedAt ?? nowString(),
+        }))
+    : [];
+  const authCredentials = [...explicitCredentials, ...migratedLegacyCredentials];
+  const currentUserId =
+    typeof input.currentUserId === 'number' && users.some(user => user.id === input.currentUserId)
+      ? input.currentUserId
+      : null;
+
+  return {
+    schemaVersion: Number.isFinite(input.schemaVersion) ? Number(input.schemaVersion) : 4,
+    users,
+    currentUserId,
+    authCredentials,
+    categories,
+    accounts,
+    bills,
+    budgets,
+  };
 }
 
 function ensureCurrentUserId(currentUserId: number | null): number {
@@ -407,7 +493,8 @@ export function ensureUserDemoData(
 }
 
 export function registerUser(data: PersistedAppData, payload: RegisterPayload): PersistedAppData {
-  const duplicated = data.users.find(user => user.username === payload.username.trim());
+  const username = normalizeUsername(payload.username);
+  const duplicated = data.users.find(user => user.username === username);
   if (duplicated) {
     throw new Error('用户名已存在');
   }
@@ -415,11 +502,15 @@ export function registerUser(data: PersistedAppData, payload: RegisterPayload): 
   const now = nowString();
   const user: UserProfile = {
     id: nextId(data.users),
-    username: payload.username.trim(),
-    password: payload.password,
+    username,
     nickname: payload.nickname.trim(),
     status: 1,
     createdAt: now,
+    updatedAt: now,
+  };
+  const credential: LocalAuthCredential = {
+    userId: user.id,
+    passwordHash: hashLocalPassword(username, payload.password),
     updatedAt: now,
   };
 
@@ -427,19 +518,22 @@ export function registerUser(data: PersistedAppData, payload: RegisterPayload): 
     {
       ...data,
       users: [...data.users, user],
+      authCredentials: [...data.authCredentials.filter(item => item.userId !== user.id), credential],
       currentUserId: user.id,
-      token: `local-token-${user.id}-${Date.now()}`,
     },
     user.id,
   );
 }
 
 export function loginUser(data: PersistedAppData, username: string, password: string): PersistedAppData {
-  const user = data.users.find(
-    item => item.username === username.trim() && item.password === password,
-  );
+  const normalizedUsername = normalizeUsername(username);
+  const user = data.users.find(item => item.username === normalizedUsername);
+  const credential = user
+    ? data.authCredentials.find(item => item.userId === user.id)
+    : undefined;
+  const passwordHash = hashLocalPassword(normalizedUsername, password);
 
-  if (!user) {
+  if (!user || !credential || credential.passwordHash !== passwordHash) {
     throw new Error('用户名或密码错误');
   }
 
@@ -447,7 +541,6 @@ export function loginUser(data: PersistedAppData, username: string, password: st
     {
       ...data,
       currentUserId: user.id,
-      token: `local-token-${user.id}-${Date.now()}`,
     },
     user.id,
   );
@@ -1468,6 +1561,180 @@ export interface AppDataExportPayload {
   budgets: BudgetSetting[];
 }
 
+const SUPPORTED_BACKUP_SCHEMA_VERSIONS = new Set([3, 4]);
+const VALID_BILL_TYPES = new Set<BillType>(['INCOME', 'EXPENSE']);
+const VALID_ACCOUNT_TYPES = new Set<AccountType>([
+  'CASH',
+  'BANK_CARD',
+  'ALIPAY',
+  'WECHAT',
+  'OTHER',
+]);
+const VALID_BILL_SOURCES = new Set<NonNullable<BillRecord['source']>>([
+  'MANUAL',
+  'IMPORT',
+  'RECURRING',
+]);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isValidMonthText(value: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+function assertBackupPayload(condition: boolean, message: string): void {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function validateBackupAccounts(accounts: Account[]): void {
+  accounts.forEach((account, index) => {
+    assertBackupPayload(
+      isFiniteNumber(account.id) && account.id > 0,
+      `备份账户第 ${index + 1} 项 id 不合法`,
+    );
+    assertBackupPayload(
+      isFiniteNumber(account.userId) && account.userId > 0,
+      `备份账户第 ${index + 1} 项 userId 不合法`,
+    );
+    assertBackupPayload(
+      typeof account.name === 'string' && account.name.trim().length > 0,
+      `备份账户第 ${index + 1} 项名称为空`,
+    );
+    assertBackupPayload(
+      VALID_ACCOUNT_TYPES.has(account.type),
+      `备份账户第 ${index + 1} 项账户类型不支持`,
+    );
+    assertBackupPayload(
+      isFiniteNumber(account.openingBalance) && isFiniteNumber(account.currentBalance),
+      `备份账户第 ${index + 1} 项金额不合法`,
+    );
+  });
+}
+
+function validateBackupCategories(categories: Category[]): void {
+  categories.forEach((category, index) => {
+    assertBackupPayload(
+      isFiniteNumber(category.id) && category.id > 0,
+      `备份分类第 ${index + 1} 项 id 不合法`,
+    );
+    assertBackupPayload(
+      category.userId === null || (isFiniteNumber(category.userId) && category.userId > 0),
+      `备份分类第 ${index + 1} 项 userId 不合法`,
+    );
+    assertBackupPayload(
+      VALID_BILL_TYPES.has(category.type),
+      `备份分类第 ${index + 1} 项类型不支持`,
+    );
+    assertBackupPayload(
+      typeof category.name === 'string' && category.name.trim().length > 0,
+      `备份分类第 ${index + 1} 项名称为空`,
+    );
+  });
+}
+
+function validateBackupBills(
+  bills: BillRecord[],
+  accounts: Account[],
+  categories: Category[],
+): void {
+  const accountIdSet = new Set(accounts.map(item => item.id));
+  const categoryIdSet = new Set(categories.map(item => item.id));
+
+  bills.forEach((bill, index) => {
+    const itemLabel = `备份账单第 ${index + 1} 项`;
+    assertBackupPayload(isFiniteNumber(bill.id) && bill.id > 0, `${itemLabel} id 不合法`);
+    assertBackupPayload(
+      isFiniteNumber(bill.userId) && bill.userId > 0,
+      `${itemLabel} userId 不合法`,
+    );
+    assertBackupPayload(VALID_BILL_TYPES.has(bill.type), `${itemLabel} 类型不支持`);
+    assertBackupPayload(
+      isFiniteNumber(bill.amount) && bill.amount > 0,
+      `${itemLabel} 金额必须大于 0`,
+    );
+    assertBackupPayload(
+      isFiniteNumber(bill.categoryId) && categoryIdSet.has(bill.categoryId),
+      `${itemLabel} 分类引用无效`,
+    );
+    assertBackupPayload(
+      VALID_ACCOUNT_TYPES.has(bill.accountType),
+      `${itemLabel} 账户类型不支持`,
+    );
+    assertBackupPayload(
+      typeof bill.billTime === 'string' && dayjs(bill.billTime).isValid(),
+      `${itemLabel} 时间格式不合法`,
+    );
+    assertBackupPayload(typeof bill.remark === 'string', `${itemLabel} 备注字段不合法`);
+    assertBackupPayload(typeof bill.deleted === 'boolean', `${itemLabel} deleted 字段不合法`);
+    assertBackupPayload(
+      bill.accountId === null ||
+        bill.accountId === undefined ||
+        (isFiniteNumber(bill.accountId) && accountIdSet.has(bill.accountId)),
+      `${itemLabel} 账户引用无效`,
+    );
+    assertBackupPayload(
+      bill.source === undefined || VALID_BILL_SOURCES.has(bill.source),
+      `${itemLabel} 来源字段不合法`,
+    );
+    if (bill.isTransfer) {
+      assertBackupPayload(
+        bill.transferTargetAccountId !== null &&
+          bill.transferTargetAccountId !== undefined &&
+          isFiniteNumber(bill.transferTargetAccountId) &&
+          accountIdSet.has(bill.transferTargetAccountId),
+        `${itemLabel} 转入账户引用无效`,
+      );
+      if (
+        bill.accountId !== null &&
+        bill.accountId !== undefined &&
+        bill.transferTargetAccountId !== null &&
+        bill.transferTargetAccountId !== undefined
+      ) {
+        assertBackupPayload(
+          bill.accountId !== bill.transferTargetAccountId,
+          `${itemLabel} 转出与转入账户不能相同`,
+        );
+      }
+    } else {
+      assertBackupPayload(
+        bill.transferTargetAccountId === null || bill.transferTargetAccountId === undefined,
+        `${itemLabel} 非转账账单不能包含转入账户`,
+      );
+    }
+    assertBackupPayload(
+      bill.tagNames === undefined ||
+        (Array.isArray(bill.tagNames) &&
+          bill.tagNames.every(tag => typeof tag === 'string')),
+      `${itemLabel} 标签字段不合法`,
+    );
+  });
+}
+
+function validateBackupBudgets(budgets: BudgetSetting[]): void {
+  budgets.forEach((budget, index) => {
+    assertBackupPayload(
+      isFiniteNumber(budget.id) && budget.id > 0,
+      `备份预算第 ${index + 1} 项 id 不合法`,
+    );
+    assertBackupPayload(
+      isFiniteNumber(budget.userId) && budget.userId > 0,
+      `备份预算第 ${index + 1} 项 userId 不合法`,
+    );
+    assertBackupPayload(
+      typeof budget.month === 'string' && isValidMonthText(budget.month),
+      `备份预算第 ${index + 1} 项 month 不合法`,
+    );
+    assertBackupPayload(
+      isFiniteNumber(budget.amount) && budget.amount >= 0,
+      `备份预算第 ${index + 1} 项金额不合法`,
+    );
+  });
+}
+
 export function exportAppData(
   data: PersistedAppData,
   currentUserId: number | null,
@@ -1500,24 +1767,43 @@ export function importAppData(
   if (!payload || typeof payload !== 'object') {
     throw new Error('导入数据格式不正确');
   }
+  if (!SUPPORTED_BACKUP_SCHEMA_VERSIONS.has(payload.schemaVersion)) {
+    throw new Error(`备份版本 ${String(payload.schemaVersion)} 暂不支持，请先升级应用`);
+  }
+  if (!Array.isArray(payload.accounts)) {
+    throw new Error('备份文件缺少 accounts 数组');
+  }
+  if (!Array.isArray(payload.categories)) {
+    throw new Error('备份文件缺少 categories 数组');
+  }
+  if (!Array.isArray(payload.bills)) {
+    throw new Error('备份文件缺少 bills 数组');
+  }
+  if (!Array.isArray(payload.budgets)) {
+    throw new Error('备份文件缺少 budgets 数组');
+  }
 
-  const importedAccounts = Array.isArray((payload as Partial<AppDataExportPayload>).accounts)
-    ? (payload as Partial<AppDataExportPayload>).accounts ?? []
-    : [];
-  const importedCategories = Array.isArray(payload.categories) ? payload.categories : [];
-  const importedBills = Array.isArray(payload.bills) ? payload.bills : [];
-  const importedBudgets = Array.isArray(payload.budgets) ? payload.budgets : [];
+  const importedAccounts = payload.accounts;
+  const importedCategories = payload.categories;
+  const importedBills = payload.bills;
+  const importedBudgets = payload.budgets;
+
+  validateBackupAccounts(importedAccounts);
+  validateBackupCategories(importedCategories);
+  validateBackupBills(importedBills, importedAccounts, importedCategories);
+  validateBackupBudgets(importedBudgets);
+
   const now = nowString();
 
   const accountsWithoutUser = data.accounts.filter(account => account.userId !== userId);
   const categoriesWithoutUser = data.categories.filter(category => category.userId !== userId);
   const billsWithoutUser = data.bills.filter(bill => bill.userId !== userId);
   const budgetsWithoutUser = data.budgets.filter(budget => budget.userId !== userId);
+  const importedCategoryById = new Map(importedCategories.map(category => [category.id, category]));
 
   let nextAccountId = nextId(data.accounts);
   const accountIdMapping = new Map<number, number>();
   const normalizedUserAccounts: Account[] = importedAccounts
-    .filter(account => account.userId !== null && account.userId !== undefined)
     .map((account, index) => {
       const normalized: Account = {
         ...account,
@@ -1557,6 +1843,16 @@ export function importAppData(
   let nextBillId = nextId(data.bills);
   const normalizedUserBills: BillRecord[] = importedBills.map(bill => {
     const mappedCategoryId = categoryIdMapping.get(bill.categoryId);
+    const importedCategory = importedCategoryById.get(bill.categoryId);
+    const mappedDefaultCategoryId =
+      importedCategory?.userId === null
+        ? categoriesWithoutUser.find(
+            category =>
+              category.userId === null &&
+              category.type === importedCategory.type &&
+              category.name === importedCategory.name,
+          )?.id
+        : undefined;
     const mappedAccountId =
       bill.accountId !== undefined && bill.accountId !== null
         ? accountIdMapping.get(bill.accountId)
@@ -1581,11 +1877,10 @@ export function importAppData(
       ...bill,
       id: nextBillId,
       userId,
-      categoryId: mappedCategoryId ?? fallbackCategoryId,
+      categoryId: mappedCategoryId ?? mappedDefaultCategoryId ?? fallbackCategoryId,
       accountId: mappedAccountId ?? fallbackAccount?.id ?? null,
-      accountType: fallbackAccount?.type ?? bill.accountType ?? 'OTHER',
-      transferTargetAccountId:
-        mappedTransferTargetAccountId ?? bill.transferTargetAccountId ?? null,
+      accountType: bill.accountType ?? fallbackAccount?.type ?? 'OTHER',
+      transferTargetAccountId: mappedTransferTargetAccountId ?? null,
       remark: bill.remark ?? '',
       source: bill.source ?? 'IMPORT',
       updatedAt: now,

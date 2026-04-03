@@ -1,5 +1,6 @@
 import {useMemo} from 'react';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {BillFilters, BillListSection, BillRecord} from '@/types/bill';
 
 function buildFiltersKey(filters?: BillFilters): string {
@@ -29,7 +30,7 @@ function buildFiltersKey(filters?: BillFilters): string {
 export function useRealBills(filters?: BillFilters): BillRecord[] {
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getBills = useAppStore(state => state.getBills);
   const filtersKey = buildFiltersKey(filters);
   const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;
@@ -48,7 +49,7 @@ export function useRecentBills(limit = 5): BillRecord[] {
 export function useBillSections(filters?: BillFilters): BillListSection[] {
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getBillSections = useAppStore(state => state.getBillSections);
   const filtersKey = buildFiltersKey(filters);
   const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;

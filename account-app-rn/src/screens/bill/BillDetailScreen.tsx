@@ -6,6 +6,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
 import {formatCurrency, formatDateLabel} from '@/utils/format';
 import {deleteBill} from '@/api/bill';
@@ -52,7 +53,7 @@ export default function BillDetailScreen({
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
   const bills = useAppStore(state => state.bills);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
   const bill = useMemo(
@@ -99,8 +100,13 @@ export default function BillDetailScreen({
         text: '删除',
         style: 'destructive',
         onPress: async () => {
-          await deleteBill(billId);
-          navigation.goBack();
+          try {
+            await deleteBill(billId);
+            navigation.goBack();
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
+          }
         },
       },
     ]);

@@ -16,6 +16,7 @@ import AccountEditScreen from '@/screens/account/AccountEditScreen';
 import AccountLedgerScreen from '@/screens/account/AccountLedgerScreen';
 import {RootStackParamList} from './types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {buildNavigationTheme, useResolvedThemeMode, useThemeColors} from '@/theme';
 import {APP_NAME} from '@/utils/constants';
 
@@ -44,10 +45,11 @@ export default function RootNavigator(): React.JSX.Element {
     () => buildNavigationTheme(resolvedThemeMode),
     [resolvedThemeMode],
   );
-  const hydrated = useAppStore(state => state.hydrated);
-  const isAuthenticated = useAppStore(state => Boolean(state.currentUserId && state.token));
+  const businessHydrated = useAppStore(state => state.hydrated);
+  const authHydrated = useAuthStore(state => state.hydrated);
+  const isAuthenticated = useAuthStore(state => Boolean(state.currentUserId));
 
-  if (!hydrated) {
+  if (!businessHydrated || !authHydrated) {
     return <SplashFallback colors={colors} />;
   }
 

@@ -5,13 +5,14 @@ import BillForm from '@/components/bill/BillForm';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {updateBill} from '@/api/bill';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BillEdit'>;
 
 export default function BillEditScreen({navigation, route}: Props): React.JSX.Element {
   const bills = useAppStore(state => state.bills);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const bill = useMemo(
     () =>
       bills.find(
@@ -65,8 +66,9 @@ export default function BillEditScreen({navigation, route}: Props): React.JSX.El
                 navigation.replace('BillDetail', {billId: route.params.billId}),
             },
           ]);
-        } catch (error: any) {
-          Alert.alert('更新失败', error.message ?? '请稍后重试');
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : '请稍后重试';
+          Alert.alert('更新失败', message);
         } finally {
           setSubmitting(false);
         }

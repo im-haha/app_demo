@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import {useMemo} from 'react';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {BudgetSummary, OverviewStats} from '@/types/bill';
 import {useRealBills} from './billSelectors';
 
@@ -51,7 +52,7 @@ export function useMonthlyOverview(month: string): OverviewStats {
 export function useBudgetSummary(month: string): BudgetSummary {
   const bills = useAppStore(state => state.bills);
   const budgets = useAppStore(state => state.budgets);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getBudgetByMonth = useAppStore(state => state.getBudgetByMonth);
 
   return useMemo(

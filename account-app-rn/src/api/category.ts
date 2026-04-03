@@ -1,4 +1,5 @@
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {ApiResponse} from '@/types/api';
 import {BillType, Category} from '@/types/bill';
 
@@ -44,9 +45,10 @@ export async function checkCategoryNameDuplicated(
   excludeCategoryId?: number,
 ): Promise<ApiResponse<boolean>> {
   const state = useAppStore.getState();
+  const currentUserId = useAuthStore.getState().currentUserId;
   const normalizedName = name.trim().toLowerCase();
   const duplicated = state.categories.some(category => {
-    if (category.userId !== state.currentUserId || category.type !== type) {
+    if (category.userId !== currentUserId || category.type !== type) {
       return false;
     }
     if (excludeCategoryId && category.id === excludeCategoryId) {

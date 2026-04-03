@@ -6,6 +6,7 @@ import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {copyLastMonthBudget, saveBudget} from '@/api/budget';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 
@@ -16,7 +17,7 @@ export default function BudgetScreen(): React.JSX.Element {
   const [amount, setAmount] = useState('');
   const bills = useAppStore(state => state.bills);
   const budgets = useAppStore(state => state.budgets);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getBudgetByMonth = useAppStore(state => state.getBudgetByMonth);
   const getBudgetHistoryStore = useAppStore(state => state.getBudgetHistory);
   const summary = useMemo(
@@ -54,8 +55,9 @@ export default function BudgetScreen(): React.JSX.Element {
     try {
       await saveBudget(month, parsed);
       Alert.alert('已保存', `${month} 预算已更新`);
-    } catch (error: any) {
-      Alert.alert('保存失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('保存失败', message);
     }
   }
 
@@ -63,8 +65,9 @@ export default function BudgetScreen(): React.JSX.Element {
     try {
       await copyLastMonthBudget(month);
       Alert.alert('已沿用', `${month} 已沿用上月预算`);
-    } catch (error: any) {
-      Alert.alert('无法沿用', error?.message ?? '请先设置上月预算');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请先设置上月预算';
+      Alert.alert('无法沿用', message);
     }
   }
 

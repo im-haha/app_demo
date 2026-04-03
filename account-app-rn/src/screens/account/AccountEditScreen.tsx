@@ -74,8 +74,9 @@ export default function AccountEditScreen({navigation, route}: Props): React.JSX
 
       Alert.alert('保存成功', '账户信息已更新');
       navigation.goBack();
-    } catch (error: any) {
-      Alert.alert('保存失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('保存失败', message);
     }
   }
 

@@ -8,6 +8,7 @@ import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import {AccountLedgerEntry} from '@/types/bill';
@@ -31,7 +32,7 @@ export default function AccountLedgerScreen({
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const getAccountLedger = useAppStore(state => state.getAccountLedger);
   const accountId = route.params.accountId;
 

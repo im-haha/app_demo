@@ -7,6 +7,7 @@ import {
   CartesianChart,
   Line,
   Scatter,
+  type ChartPressState,
   useChartPressState,
 } from 'victory-native';
 import {DashPathEffect, Line as SkiaLine, matchFont, vec} from '@shopify/react-native-skia';
@@ -42,6 +43,26 @@ interface TrendDatum {
   axisLabel: string;
   date: string;
 }
+
+type SharedPressState = ChartPressState<{
+  x: number;
+  y: {
+    cumulativeAmount: number;
+    dailyAmount: number;
+  };
+}>;
+type MainPressState = ChartPressState<{
+  x: number;
+  y: {
+    cumulativeAmount: number;
+  };
+}>;
+type SubPressState = ChartPressState<{
+  x: number;
+  y: {
+    dailyAmount: number;
+  };
+}>;
 
 const MAIN_CHART_HEIGHT = 208;
 const SUB_CHART_HEIGHT = MAIN_CHART_HEIGHT;
@@ -209,12 +230,15 @@ export default function CashflowTrendXLCard({
       dailyAmount: 0,
     },
   });
+  const sharedPressState = chartPressState as SharedPressState;
+  const mainPressState = chartPressState as unknown as MainPressState;
+  const subPressState = chartPressState as unknown as SubPressState;
 
   useAnimatedReaction(
     () => ({
-      active: chartPressState.isActive.value,
-      index: chartPressState.matchedIndex.value,
-      x: chartPressState.x.position.value,
+      active: sharedPressState.isActive.value,
+      index: sharedPressState.matchedIndex.value,
+      x: sharedPressState.x.position.value,
     }),
     payload => {
       if (!payload.active || payload.index < 0) {
@@ -224,7 +248,7 @@ export default function CashflowTrendXLCard({
       runOnJS(setActiveIndex)(payload.index);
       runOnJS(setActiveXPosition)(payload.x);
     },
-    [chartPressState],
+    [sharedPressState],
   );
 
   useEffect(() => {
@@ -337,7 +361,7 @@ export default function CashflowTrendXLCard({
                 domain={{y: [0, mainYAxisMax]}}
                 domainPadding={{left: 12, right: 12}}
                 padding={MAIN_CHART_PADDING}
-                chartPressState={chartPressState as any}
+                chartPressState={mainPressState}
                 chartPressConfig={{
                   pan: {
                     activateAfterLongPress: CHART_PRESS_ACTIVATE_DELAY,
@@ -450,7 +474,7 @@ export default function CashflowTrendXLCard({
                   domain={{y: [0, subYAxisMax]}}
                   domainPadding={{left: 8, right: 8}}
                   padding={SUB_CHART_PADDING}
-                  chartPressState={chartPressState as any}
+                  chartPressState={subPressState}
                   chartPressConfig={{
                     pan: {
                       activateAfterLongPress: CHART_PRESS_ACTIVATE_DELAY,

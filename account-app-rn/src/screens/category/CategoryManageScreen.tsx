@@ -14,6 +14,7 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import AppInput from '@/components/common/AppInput';
 import EmptyState from '@/components/common/EmptyState';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {
   createCategory,
   deleteCategory,
@@ -37,7 +38,7 @@ export default function CategoryManageScreen(): React.JSX.Element {
   const [color, setColor] = useState(colorOptions[0]);
   const allCategories = useAppStore(state => state.categories);
   const allBills = useAppStore(state => state.bills);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const categories = useMemo(
     () =>
       allCategories
@@ -80,8 +81,9 @@ export default function CategoryManageScreen(): React.JSX.Element {
         await createCategory({type, name, icon, color});
       }
       setVisible(false);
-    } catch (error: any) {
-      Alert.alert('保存失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('保存失败', message);
     }
   }
 
@@ -114,8 +116,9 @@ export default function CategoryManageScreen(): React.JSX.Element {
         onPress: async () => {
           try {
             await deleteCategory(categoryId);
-          } catch (error: any) {
-            Alert.alert('删除失败', error?.message ?? '请稍后重试');
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
           }
         },
       },
@@ -131,8 +134,9 @@ export default function CategoryManageScreen(): React.JSX.Element {
       await replaceCategoryAndDelete(deletingCategoryId, replaceTargetCategoryId);
       setDeletingCategoryId(null);
       setReplaceTargetCategoryId(null);
-    } catch (error: any) {
-      Alert.alert('删除失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('删除失败', message);
     }
   }
 

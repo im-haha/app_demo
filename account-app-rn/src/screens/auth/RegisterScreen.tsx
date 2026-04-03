@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {Alert, KeyboardAvoidingView, Platform, ScrollView} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Card, Text} from 'react-native-paper';
+import {ValidationError} from 'yup';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {AuthStackParamList} from '@/navigation/types';
@@ -10,10 +11,16 @@ import {registerSchema} from '@/utils/validate';
 import {useThemeColors} from '@/theme';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
+type RegisterFormState = {
+  username: string;
+  password: string;
+  confirmPassword: string;
+  nickname: string;
+};
 
 export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   const colors = useThemeColors();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<RegisterFormState>({
     username: '',
     password: '',
     confirmPassword: '',
@@ -23,6 +30,10 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function handleSubmit() {
+    if (loading) {
+      return;
+    }
+
     try {
       setLoading(true);
       setErrors({});
@@ -32,17 +43,18 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
         password: form.password,
         nickname: form.nickname,
       });
-    } catch (error: any) {
-      if (error.name === 'ValidationError') {
+    } catch (error: unknown) {
+      if (error instanceof ValidationError) {
         const nextErrors: Record<string, string> = {};
-        error.inner.forEach((item: any) => {
+        error.inner.forEach(item => {
           if (item.path) {
             nextErrors[item.path] = item.message;
           }
         });
         setErrors(nextErrors);
       } else {
-        Alert.alert('注册失败', error.message ?? '请稍后重试');
+        const message = error instanceof Error ? error.message : '请稍后重试';
+        Alert.alert('创建失败', message);
       }
     } finally {
       setLoading(false);
@@ -57,10 +69,10 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
         <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
           <Card.Content style={{paddingVertical: 20, gap: 20}}>
             <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-              创建本地账户
+              创建本地账本档案
             </Text>
             <AppInput
-              label="昵称"
+              label="账本昵称"
               value={form.nickname}
               onChangeText={nickname => setForm(current => ({...current, nickname}))}
               autoComplete="off"
@@ -68,7 +80,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               errorText={errors.nickname}
             />
             <AppInput
-              label="用户名"
+              label="账本账号"
               value={form.username}
               onChangeText={username => setForm(current => ({...current, username}))}
               autoComplete="username"
@@ -95,11 +107,11 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               importantForAutofill="no"
               errorText={errors.confirmPassword}
             />
-            <AppButton onPress={handleSubmit} loading={loading}>
-              注册并进入
+            <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
+              创建并进入账本
             </AppButton>
-            <AppButton mode="text" onPress={() => navigation.goBack()}>
-              返回登录
+            <AppButton mode="text" onPress={() => navigation.goBack()} disabled={loading}>
+              返回解锁
             </AppButton>
           </Card.Content>
         </Card>

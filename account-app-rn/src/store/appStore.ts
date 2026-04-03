@@ -15,7 +15,6 @@ import {
   OverviewStats,
   TrendPoint,
 } from '@/types/bill';
-import {LoginPayload, RegisterPayload, UserProfile} from '@/types/user';
 import {
   createCategory,
   createInitialAppData,
@@ -41,28 +40,22 @@ import {
   listBills,
   listBillSections,
   listCategories,
-  loginUser,
+  normalizePersistedAppData,
   AppDataExportPayload,
   PersistedAppData,
   RangeIncomeExpenseTotals,
   replaceCategoryAndDelete,
-  registerUser,
   saveBill,
   updateAccount,
   updateCategory,
-  updateNickname,
   upsertBudget,
 } from '@/services/localAppService';
+import {useAuthStore} from '@/store/authStore';
 import {storageKeys} from '@/utils/storage';
 
 interface AppState extends PersistedAppData {
   hydrated: boolean;
   initialize: () => void;
-  register: (payload: RegisterPayload) => Promise<UserProfile>;
-  login: (payload: LoginPayload) => Promise<UserProfile>;
-  logout: () => void;
-  getCurrentUser: () => UserProfile | undefined;
-  updateProfile: (nickname: string) => void;
   getAccounts: (options?: {includeArchived?: boolean}) => Account[];
   getAccountById: (accountId: number) => Account | undefined;
   addAccountRecord: (payload: Pick<Account, 'name' | 'type' | 'openingBalance' | 'includeInTotal'>) => void;
@@ -125,50 +118,22 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       ...initialData,
+      users: [],
+      authCredentials: [],
       hydrated: false,
+      currentUserId: useAuthStore.getState().currentUserId,
       initialize: () => {
         const state = get();
         if (state.categories.length === 0) {
-          set(createInitialAppData());
+          const fresh = createInitialAppData();
+          set({
+            ...fresh,
+            users: [],
+            authCredentials: [],
+            currentUserId: useAuthStore.getState().currentUserId,
+          });
         }
       },
-      register: async payload => {
-        let createdUser: UserProfile | undefined;
-
-        set(state => {
-          const next = registerUser(state, payload);
-          createdUser = next.users.find(item => item.id === next.currentUserId);
-          return next;
-        });
-
-        if (!createdUser) {
-          throw new Error('注册失败');
-        }
-
-        return createdUser;
-      },
-      login: async payload => {
-        let currentUser: UserProfile | undefined;
-
-        set(state => {
-          const next = loginUser(state, payload.username, payload.password);
-          currentUser = next.users.find(item => item.id === next.currentUserId);
-          return next;
-        });
-
-        if (!currentUser) {
-          throw new Error('登录失败');
-        }
-
-        return currentUser;
-      },
-      logout: () => set({currentUserId: null, token: null}),
-      getCurrentUser: () => {
-        const state = get();
-        return state.users.find(user => user.id === state.currentUserId);
-      },
-      updateProfile: nickname =>
-        set(state => updateNickname(state, state.currentUserId, nickname)),
       getAccounts: options => {
         const state = get();
         return listAccounts(state, state.currentUserId, options);
@@ -303,9 +268,6 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: state => ({
         schemaVersion: state.schemaVersion,
-        users: state.users,
-        currentUserId: state.currentUserId,
-        token: state.token,
         categories: state.categories,
         accounts: state.accounts,
         bills: state.bills,
@@ -313,16 +275,36 @@ export const useAppStore = create<AppState>()(
       }),
       onRehydrateStorage: () => () => {
         useAppStore.setState(current => {
+          const persistedSnapshot = normalizePersistedAppData({
+            schemaVersion: current.schemaVersion,
+            users: current.users,
+            currentUserId: current.currentUserId,
+            authCredentials: current.authCredentials,
+            categories: current.categories,
+            accounts: current.accounts,
+            bills: current.bills,
+            budgets: current.budgets,
+          });
+          useAuthStore.getState().hydrateFromLegacy({
+            users: persistedSnapshot.users,
+            currentUserId: persistedSnapshot.currentUserId,
+            authCredentials: persistedSnapshot.authCredentials,
+          });
+          const activeUserId = useAuthStore.getState().currentUserId;
           const normalized = ensureUserDemoData(
             {
-              ...current,
-              schemaVersion: current.schemaVersion ?? 3,
-              accounts: current.accounts ?? [],
+              ...persistedSnapshot,
+              users: [],
+              authCredentials: [],
+              currentUserId: activeUserId,
             },
-            current.currentUserId,
+            activeUserId,
           );
           return {
             ...normalized,
+            users: [],
+            authCredentials: [],
+            currentUserId: activeUserId,
             hydrated: true,
           };
         });
@@ -330,3 +312,24 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
+
+useAuthStore.subscribe(state => {
+  const {currentUserId} = state;
+  useAppStore.setState(previous => {
+    const syncedState =
+      previous.currentUserId === currentUserId
+        ? previous
+        : {...previous, currentUserId};
+    if (!currentUserId) {
+      return syncedState;
+    }
+
+    const ensured = ensureUserDemoData(syncedState, currentUserId);
+    return {
+      ...ensured,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+  });
+});

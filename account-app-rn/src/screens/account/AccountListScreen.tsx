@@ -6,6 +6,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 import {accountTypeOptions} from '@/utils/constants';
@@ -14,9 +15,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AccountList'>;
 
 export default function AccountListScreen({navigation}: Props): React.JSX.Element {
   const colors = useThemeColors();
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const userAccounts = useAppStore(state =>
     state.accounts
-      .filter(account => account.userId === state.currentUserId)
+      .filter(account => account.userId === currentUserId)
       .sort((left, right) => left.sortNum - right.sortNum),
   );
   const [showArchived, setShowArchived] = useState(false);

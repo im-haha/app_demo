@@ -1,10 +1,10 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Animated, ScrollView, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
 import {Card, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
@@ -14,19 +14,20 @@ import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
 import {useRecentBills} from '@/store/selectors/billSelectors';
 import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
+import {useMainTabNavigation} from '@/navigation/hooks';
 import {deleteBill} from '@/api/bill';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
+  const navigation = useMainTabNavigation<'Home'>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
   const listBottomPadding = fabBottom + 88;
   const month = dayjs().format('YYYY-MM');
-  const users = useAppStore(state => state.users);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const users = useAuthStore(state => state.users);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
   const overview = useMonthlyOverview(month);
@@ -74,8 +75,9 @@ export default function HomeScreen(): React.JSX.Element {
         onPress: async () => {
           try {
             await deleteBill(billId);
-          } catch (error: any) {
-            Alert.alert('删除失败', error.message ?? '请稍后重试');
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
           }
         },
       },
@@ -101,6 +103,7 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
         <ScrollView
           bounces={false}
+          onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: listBottomPadding,

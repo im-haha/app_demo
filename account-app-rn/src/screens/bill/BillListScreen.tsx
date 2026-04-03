@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, Animated, Pressable, SectionList, TextInput, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
 import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -23,9 +22,11 @@ import {filterTypeOptions} from '@/utils/constants';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 import {useBillSections} from '@/store/selectors/billSelectors';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {formatCurrency} from '@/utils/format';
 import {BillFilters, BillListSection} from '@/types/bill';
 import {BillTimePreset, billTimePresetOptions, resolveTimeRange} from '@/utils/timeRange';
+import {useMainTabNavigation} from '@/navigation/hooks';
 import {deleteBill} from '@/api/bill';
 
 function sanitizeAmountFilterInput(input: string): string {
@@ -54,7 +55,7 @@ export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
+  const navigation = useMainTabNavigation<'Bills'>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
   const listBottomPadding = fabBottom + 88;
@@ -84,7 +85,7 @@ export default function BillListScreen(): React.JSX.Element {
   const filterAnim = useRef(new Animated.Value(typeIndex < 0 ? 0 : typeIndex)).current;
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const visibleCategories = useMemo(
     () =>
       categories
@@ -317,8 +318,9 @@ export default function BillListScreen(): React.JSX.Element {
         onPress: async () => {
           try {
             await deleteBill(billId);
-          } catch (error: any) {
-            Alert.alert('删除失败', error.message ?? '请稍后重试');
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
           }
         },
       },
@@ -796,6 +798,7 @@ export default function BillListScreen(): React.JSX.Element {
         </View>
         <SectionList
           sections={sections}
+          onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
           keyExtractor={item => String(item.id)}
           renderSectionHeader={renderSectionHeader}
           renderItem={({item}) => (

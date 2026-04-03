@@ -37,8 +37,9 @@ export default function BillAddScreen({navigation}: Props): React.JSX.Element {
               onPress: () => navigation.goBack(),
             },
           ]);
-        } catch (error: any) {
-          Alert.alert('保存失败', error.message ?? '请稍后重试');
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : '请稍后重试';
+          Alert.alert('保存失败', message);
         } finally {
           setSubmitting(false);
         }

@@ -1,12 +1,12 @@
 import React, {useMemo, useState} from 'react';
 import {Alert, Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
 import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
 import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
+import {useMainTabNavigation} from '@/navigation/hooks';
 import {exportMyData, importMyData} from '@/api/data';
 import {AppDataExportPayload} from '@/services/localAppService';
 import {
@@ -49,14 +49,17 @@ export default function MineScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
-  const users = useAppStore(state => state.users);
-  const currentUserId = useAppStore(state => state.currentUserId);
-  const logout = useAppStore(state => state.logout);
+  const navigation = useMainTabNavigation<'Mine'>();
+  const users = useAuthStore(state => state.users);
+  const currentUserId = useAuthStore(state => state.currentUserId);
+  const logout = useAuthStore(state => state.logout);
+  const getCurrentCredentialHash = useAuthStore(state => state.getCurrentCredentialHash);
   const themePreference = useThemeStore(state => state.preference);
   const setThemePreference = useThemeStore(state => state.setPreference);
   const [themeDialogVisible, setThemeDialogVisible] = useState(false);
-  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupPhase, setBackupPhase] = useState<
+    'idle' | 'picking' | 'confirming' | 'importing' | 'exporting'
+  >('idle');
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -69,42 +72,61 @@ export default function MineScreen(): React.JSX.Element {
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
 
+  function resolveBackupSecret(): string {
+    const secret = getCurrentCredentialHash();
+    if (!secret) {
+      throw new Error('未找到账本凭证，请重新解锁后重试');
+    }
+    return secret;
+  }
+
   async function handleExportBackupFile(): Promise<void> {
-    if (backupLoading) {
+    if (backupPhase !== 'idle') {
       return;
     }
     try {
-      setBackupLoading(true);
+      setBackupPhase('exporting');
       const response = await exportMyData();
-      const fileInfo = await exportBackupByShare(response.data);
+      const fileInfo = await exportBackupByShare(response.data, {
+        encryptionSecret: resolveBackupSecret(),
+      });
       Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
-    } catch (error: any) {
-      Alert.alert('导出失败', error?.message ?? '请稍后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('导出失败', message);
     } finally {
-      setBackupLoading(false);
+      setBackupPhase('idle');
     }
   }
 
   async function handleImportBackupFile(): Promise<void> {
-    if (backupLoading) {
+    if (backupPhase !== 'idle') {
       return;
     }
     try {
-      setBackupLoading(true);
-      const pickedFile = await pickBackupPayloadFromFile();
+      setBackupPhase('picking');
+      const pickedFile = await pickBackupPayloadFromFile({
+        encryptionSecret: resolveBackupSecret(),
+      });
       if (!pickedFile) {
+        setBackupPhase('idle');
         return;
       }
 
       const importedAtText = pickedFile.payload.exportedAt
         ? `导出时间：${pickedFile.payload.exportedAt}\n`
         : '';
+      setBackupPhase('confirming');
 
       Alert.alert(
         '确认导入备份',
         `${importedAtText}文件：${pickedFile.fileName}\n导入会覆盖当前账户账本数据，是否继续？`,
         [
-          {text: '取消', style: 'cancel'},
+          {
+            text: '取消',
+            style: 'cancel',
+            onPress: () => setBackupPhase('idle'),
+          },
           {
             text: '继续导入',
             style: 'destructive',
@@ -113,11 +135,14 @@ export default function MineScreen(): React.JSX.Element {
             },
           },
         ],
+        {
+          onDismiss: () => setBackupPhase('idle'),
+        },
       );
-    } catch (error: any) {
-      Alert.alert('导入失败', error?.message ?? '请检查备份文件');
-    } finally {
-      setBackupLoading(false);
+    } catch (error: unknown) {
+      setBackupPhase('idle');
+      const message = error instanceof Error ? error.message : '请检查备份文件';
+      Alert.alert('导入失败', message);
     }
   }
 
@@ -126,17 +151,22 @@ export default function MineScreen(): React.JSX.Element {
     sourceFileName: string,
   ): Promise<void> {
     try {
+      setBackupPhase('importing');
       const currentPayload = await exportMyData();
       const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
         prefix: 'auto-backup-before-import',
+        encryptionSecret: resolveBackupSecret(),
       });
       await importMyData(payload);
       Alert.alert(
         '导入成功',
         `已从 ${sourceFileName} 导入数据。\n导入前自动备份：${autoBackup.fileName}`,
       );
-    } catch (error: any) {
-      Alert.alert('导入失败', error?.message ?? '请检查备份文件后重试');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请检查备份文件后重试';
+      Alert.alert('导入失败', message);
+    } finally {
+      setBackupPhase('idle');
     }
   }
 
@@ -303,21 +333,23 @@ export default function MineScreen(): React.JSX.Element {
               </View>
             )}
             onPress={() =>
-              Alert.alert('数据备份', '选择需要的操作', [
-                {text: '取消', style: 'cancel'},
-                {
-                  text: '导入',
-                  onPress: () => {
-                    void handleImportBackupFile();
-                  },
-                },
-                {
-                  text: '导出',
-                  onPress: () => {
-                    void handleExportBackupFile();
-                  },
-                },
-              ])
+              backupPhase !== 'idle'
+                ? undefined
+                : Alert.alert('数据备份', '选择需要的操作', [
+                    {text: '取消', style: 'cancel'},
+                    {
+                      text: '导入',
+                      onPress: () => {
+                        void handleImportBackupFile();
+                      },
+                    },
+                    {
+                      text: '导出',
+                      onPress: () => {
+                        void handleExportBackupFile();
+                      },
+                    },
+                  ])
             }
           />
           <List.Item

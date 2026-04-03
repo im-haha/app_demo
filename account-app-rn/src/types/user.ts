@@ -1,7 +1,6 @@
 export interface UserProfile {
   id: number;
   username: string;
-  password: string;
   nickname: string;
   avatar?: string;
   status: number;
@@ -24,5 +23,4 @@ export interface UpdateProfilePayload {
 
 export interface SessionState {
   currentUserId: number | null;
-  token: string | null;
 }

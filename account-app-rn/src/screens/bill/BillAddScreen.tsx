@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {Alert} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import BillForm from '@/components/bill/BillForm';
@@ -11,13 +11,20 @@ type Props = NativeStackScreenProps<RootStackParamList, 'BillAdd'>;
 export default function BillAddScreen({navigation}: Props): React.JSX.Element {
   const getCategories = useAppStore(state => state.getCategories);
   const getAccounts = useAppStore(state => state.getAccounts);
+  const [submitting, setSubmitting] = useState(false);
 
   return (
     <BillForm
       categories={getCategories}
       accounts={getAccounts}
       submitLabel="保存账单"
+      loading={submitting}
+      submitDisabled={submitting}
       onSubmit={async payload => {
+        if (submitting) {
+          return;
+        }
+        setSubmitting(true);
         try {
           await createBill(payload);
           Alert.alert('保存成功', '账单已保存', [
@@ -32,6 +39,8 @@ export default function BillAddScreen({navigation}: Props): React.JSX.Element {
           ]);
         } catch (error: any) {
           Alert.alert('保存失败', error.message ?? '请稍后重试');
+        } finally {
+          setSubmitting(false);
         }
       }}
     />

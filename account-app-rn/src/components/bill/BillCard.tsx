@@ -59,12 +59,13 @@ export default function BillCard({
       : '-';
 
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} style={{borderRadius: 22}}>
       <Card
         mode="contained"
         style={{
           backgroundColor: colors.surface,
           borderRadius: 22,
+          overflow: 'hidden',
         }}>
         <Card.Content
           style={{

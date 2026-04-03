@@ -4,6 +4,10 @@ import {Menu, SegmentedButtons, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
+import DateTimePickerField from '@/components/common/DateTimePickerField';
+import DateTimePickerModal, {
+  DateTimePickerMode,
+} from '@/components/common/DateTimePickerModal';
 import BillTypeSwitch from './BillTypeSwitch';
 import CategorySelector from './CategorySelector';
 import {Account, BillInput, BillType, Category} from '@/types/bill';
@@ -15,6 +19,8 @@ interface Props {
   accounts: () => Account[];
   onSubmit: (payload: BillInput) => void;
   submitLabel: string;
+  loading?: boolean;
+  submitDisabled?: boolean;
 }
 
 type CategoryMemory = Record<BillType, number | null>;
@@ -65,6 +71,8 @@ export default function BillForm({
   accounts,
   onSubmit,
   submitLabel,
+  loading = false,
+  submitDisabled = false,
 }: Props): React.JSX.Element {
   const initialDate = dayjs(initialValue?.billTime || undefined);
   const [billMode, setBillMode] = useState<BillMode>(
@@ -88,6 +96,8 @@ export default function BillForm({
   const [tagInput, setTagInput] = useState(
     initialValue?.tagNames?.join(', ') ?? '',
   );
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerMode, setPickerMode] = useState<DateTimePickerMode>('date');
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
   const [transferMenuVisible, setTransferMenuVisible] = useState(false);
   const [recentCategoryByType, setRecentCategoryByType] = useState<CategoryMemory>({
@@ -226,6 +236,42 @@ export default function BillForm({
     setBillDate(yesterday.format('YYYY-MM-DD'));
     setBillClock(yesterday.format('HH:mm'));
   }, []);
+
+  const pickerInitialValue = useMemo(() => {
+    const dateTimeText = `${billDate.trim()} ${billClock.trim()}:00`;
+    const parsed = dayjs(dateTimeText);
+    if (parsed.format('YYYY-MM-DD HH:mm:ss') === dateTimeText) {
+      return parsed.toDate();
+    }
+    return dayjs().second(0).toDate();
+  }, [billClock, billDate]);
+
+  const openDatePicker = useCallback(() => {
+    setPickerMode('date');
+    setPickerVisible(true);
+  }, []);
+
+  const openTimePicker = useCallback(() => {
+    setPickerMode('time');
+    setPickerVisible(true);
+  }, []);
+
+  const closePicker = useCallback(() => {
+    setPickerVisible(false);
+  }, []);
+
+  const handlePickerConfirm = useCallback(
+    (value: Date) => {
+      const next = dayjs(value);
+      if (pickerMode === 'date') {
+        setBillDate(next.format('YYYY-MM-DD'));
+      } else {
+        setBillClock(next.format('HH:mm'));
+      }
+      setPickerVisible(false);
+    },
+    [pickerMode],
+  );
 
   const handleSubmit = useCallback(() => {
     const parsedAmount = Number(amount);
@@ -466,21 +512,21 @@ export default function BillForm({
         </View>
         <View style={{flexDirection: 'row', gap: 10}}>
           <View style={{flex: 1}}>
-            <AppInput
+            <DateTimePickerField
               label="日期"
               value={billDate}
-              onChangeText={setBillDate}
-              placeholder="YYYY-MM-DD"
-              keyboardType="numbers-and-punctuation"
+              placeholder="请选择日期"
+              onPress={openDatePicker}
+              disabled={loading}
             />
           </View>
           <View style={{flex: 1}}>
-            <AppInput
+            <DateTimePickerField
               label="时间"
               value={billClock}
-              onChangeText={setBillClock}
-              placeholder="HH:mm"
-              keyboardType="numbers-and-punctuation"
+              placeholder="请选择时间"
+              onPress={openTimePicker}
+              disabled={loading}
             />
           </View>
         </View>
@@ -492,7 +538,19 @@ export default function BillForm({
         placeholder="例如：早餐、打车、发工资"
         multiline
       />
-      <AppButton onPress={handleSubmit}>{submitLabel}</AppButton>
+      <AppButton
+        onPress={handleSubmit}
+        loading={loading}
+        disabled={loading || submitDisabled}>
+        {submitLabel}
+      </AppButton>
+      <DateTimePickerModal
+        visible={pickerVisible}
+        mode={pickerMode}
+        initialValue={pickerInitialValue}
+        onCancel={closePicker}
+        onConfirm={handlePickerConfirm}
+      />
     </ScrollView>
   );
 }

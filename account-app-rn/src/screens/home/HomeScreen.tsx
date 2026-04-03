@@ -1,5 +1,5 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, ScrollView, View} from 'react-native';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, Animated, ScrollView, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {Card, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
@@ -8,11 +8,13 @@ import {useAppStore} from '@/store/appStore';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
+import SwipeableBillRow from '@/components/bill/SwipeableBillRow';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
 import {useRecentBills} from '@/store/selectors/billSelectors';
 import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
+import {deleteBill} from '@/api/bill';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -30,6 +32,7 @@ export default function HomeScreen(): React.JSX.Element {
   const overview = useMonthlyOverview(month);
   const budget = useBudgetSummary(month);
   const bills = useRecentBills(5);
+  const [activeSwipeRowKey, setActiveSwipeRowKey] = useState<number | null>(null);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -61,6 +64,23 @@ export default function HomeScreen(): React.JSX.Element {
       useNativeDriver: false,
     }).start();
   }, [budgetBarAnim, budgetUsageRate]);
+
+  const handleDeleteBill = useCallback((billId: number) => {
+    Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteBill(billId);
+          } catch (error: any) {
+            Alert.alert('删除失败', error.message ?? '请稍后重试');
+          }
+        },
+      },
+    ]);
+  }, []);
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -231,24 +251,41 @@ export default function HomeScreen(): React.JSX.Element {
               />
             ) : (
               bills.map(item => (
-                <BillCard
-                  key={item.id}
-                  bill={item}
-                  category={categories.find(
-                    category => category.id === item.categoryId,
-                  )}
-                  sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
-                  transferTargetAccountName={
-                    item.transferTargetAccountId
-                      ? accountNameMap.get(item.transferTargetAccountId)
-                      : undefined
-                  }
-                  onPress={() =>
-                    navigation.navigate('BillDetail', {
-                      billId: item.id,
-                    })
-                  }
-                />
+                <View key={item.id} style={{marginBottom: 10}}>
+                  <SwipeableBillRow
+                    rowKey={item.id}
+                    activeRowKey={activeSwipeRowKey}
+                    onRowOpen={setActiveSwipeRowKey}
+                    onRowClose={rowKey =>
+                      setActiveSwipeRowKey(current =>
+                        current === rowKey ? null : current,
+                      )
+                    }
+                    onPress={() =>
+                      navigation.navigate('BillDetail', {
+                        billId: item.id,
+                      })
+                    }
+                    onEdit={() =>
+                      navigation.navigate('BillEdit', {
+                        billId: item.id,
+                      })
+                    }
+                    onDelete={() => handleDeleteBill(item.id)}>
+                    <BillCard
+                      bill={item}
+                      category={categories.find(
+                        category => category.id === item.categoryId,
+                      )}
+                      sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+                      transferTargetAccountName={
+                        item.transferTargetAccountId
+                          ? accountNameMap.get(item.transferTargetAccountId)
+                          : undefined
+                      }
+                    />
+                  </SwipeableBillRow>
+                </View>
               ))
             )}
           </View>

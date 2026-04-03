@@ -11,6 +11,7 @@ import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
+import {buildStatsDisplayBillMappings} from '@/utils/statsDisplayData';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -26,7 +27,7 @@ export default function HomeScreen(): React.JSX.Element {
   const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
-  const userBills = useMemo(
+  const sourceUserBills = useMemo(
     () =>
       storeBills
         .filter(bill => bill.userId === currentUserId && !bill.deleted)
@@ -35,6 +36,14 @@ export default function HomeScreen(): React.JSX.Element {
             dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
         ),
     [storeBills, currentUserId],
+  );
+  const statsDisplayBills = useMemo(
+    () => buildStatsDisplayBillMappings(sourceUserBills, categories, currentUserId, 30),
+    [sourceUserBills, categories, currentUserId],
+  );
+  const userBills = useMemo(
+    () => statsDisplayBills.map(item => item.displayBill),
+    [statsDisplayBills],
   );
   const overview = useMemo(() => {
     const today = dayjs().format('YYYY-MM-DD');
@@ -109,7 +118,7 @@ export default function HomeScreen(): React.JSX.Element {
       usageRate,
     };
   }, [month, budgets, userBills, currentUserId]);
-  const bills = useMemo(() => userBills.slice(0, 5), [userBills]);
+  const bills = useMemo(() => statsDisplayBills.slice(0, 5), [statsDisplayBills]);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -301,15 +310,20 @@ export default function HomeScreen(): React.JSX.Element {
                 icon="notebook-plus-outline"
               />
             ) : (
-              bills.map(bill => (
+              bills.map(item => (
                 <BillCard
-                  key={bill.id}
-                  bill={bill}
+                  key={item.displayBill.id}
+                  bill={item.displayBill}
                   category={categories.find(
-                    item => item.id === bill.categoryId,
+                    category => category.id === item.displayBill.categoryId,
                   )}
-                  onPress={() =>
-                    navigation.navigate('BillDetail', {billId: bill.id})
+                  onPress={
+                    item.sourceBillId
+                      ? () =>
+                          navigation.navigate('BillDetail', {
+                            billId: item.sourceBillId,
+                          })
+                      : undefined
                   }
                 />
               ))

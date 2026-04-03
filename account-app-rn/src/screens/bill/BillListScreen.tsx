@@ -13,6 +13,7 @@ import SearchLineIcon from '@/components/common/icons/SearchLineIcon';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
+import {buildStatsDisplayBillMappings} from '@/utils/statsDisplayData';
 
 export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -35,6 +36,26 @@ export default function BillListScreen(): React.JSX.Element {
   const storeBills = useAppStore(state => state.bills);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
+  const sourceUserBills = useMemo(
+    () =>
+      storeBills
+        .filter(bill => bill.userId === currentUserId && !bill.deleted)
+        .sort(
+          (left, right) =>
+            dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
+        ),
+    [storeBills, currentUserId],
+  );
+  const statsAlignedBills = useMemo(
+    () =>
+      buildStatsDisplayBillMappings(
+        sourceUserBills,
+        categories,
+        currentUserId,
+        30,
+      ),
+    [sourceUserBills, categories, currentUserId],
+  );
   const categoryNameMap = useMemo(() => {
     const map = new Map<number, string>();
     categories.forEach(category => {
@@ -47,16 +68,17 @@ export default function BillListScreen(): React.JSX.Element {
       const keywordText = keyword.trim().toLowerCase();
 
       return (
-      storeBills
-        .filter(bill => bill.userId === currentUserId && !bill.deleted)
-        .filter(bill => (type === 'ALL' ? true : bill.type === type))
-        .filter(bill => {
+      statsAlignedBills
+        .filter(item =>
+          type === 'ALL' ? true : item.displayBill.type === type,
+        )
+        .filter(item => {
           if (!keywordText) {
             return true;
           }
-          const remarkText = (bill.remark ?? '').toLowerCase();
+          const remarkText = (item.displayBill.remark ?? '').toLowerCase();
           const categoryText = (
-            categoryNameMap.get(bill.categoryId) ?? ''
+            categoryNameMap.get(item.displayBill.categoryId) ?? ''
           ).toLowerCase();
           return (
             remarkText.includes(keywordText) ||
@@ -65,11 +87,12 @@ export default function BillListScreen(): React.JSX.Element {
         })
         .sort(
           (left, right) =>
-            dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
+            dayjs(right.displayBill.billTime).valueOf() -
+            dayjs(left.displayBill.billTime).valueOf(),
         )
       );
     },
-    [storeBills, currentUserId, type, keyword, categoryNameMap],
+    [statsAlignedBills, type, keyword, categoryNameMap],
   );
   const indicatorWidth = Math.max((filterSwitchWidth - 4) / 3, 0);
   const indicatorTranslateX = filterAnim.interpolate({
@@ -277,13 +300,20 @@ export default function BillListScreen(): React.JSX.Element {
               icon="wallet-outline"
             />
           ) : (
-            bills.map(bill => (
+            bills.map(item => (
               <BillCard
-                key={bill.id}
-                bill={bill}
-                category={categories.find(item => item.id === bill.categoryId)}
-                onPress={() =>
-                  navigation.navigate('BillDetail', {billId: bill.id})
+                key={item.displayBill.id}
+                bill={item.displayBill}
+                category={categories.find(
+                  category => category.id === item.displayBill.categoryId,
+                )}
+                onPress={
+                  item.sourceBillId
+                    ? () =>
+                        navigation.navigate('BillDetail', {
+                          billId: item.sourceBillId,
+                        })
+                    : undefined
                 }
               />
             ))

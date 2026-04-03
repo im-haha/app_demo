@@ -64,9 +64,9 @@ npm run typecheck:web   # Web 类型检查
 终端 1：
 
 ```bash
-cd account-app-rn
 npm install
 npm run ios:pods
+cd account-app-rn
 npm run start:ios
 ```
 

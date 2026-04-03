@@ -23,7 +23,7 @@ export function getThemeColors(mode: ResolvedThemeMode): AppColors {
 }
 
 function getSurfaceVariant(mode: ResolvedThemeMode): string {
-  return mode === 'dark' ? '#222D32' : '#F0E8DA';
+  return mode === 'dark' ? '#203040' : '#EAF0F7';
 }
 
 export function buildPaperTheme(mode: ResolvedThemeMode): MD3Theme {

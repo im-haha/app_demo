@@ -1,18 +1,24 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, Easing, Pressable, ScrollView, View} from 'react-native';
+import {Animated, Easing, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
-import PieChartCard from '@/components/stats/PieChartCard';
-import TrendChartCard from '@/components/stats/TrendChartCard';
+import CashflowTrendCard from '@/components/stats/CashflowTrendCard';
+import CashflowTrendXLCard from '@/components/stats/xl/CashflowTrendXLCard';
+import CategoryDonutCard from '@/components/stats/CategoryDonutCard';
+import CompareBarCard from '@/components/stats/CompareBarCard';
+import StatsSummaryStrip from '@/components/stats/StatsSummaryStrip';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 
 export default function StatsScreen(): React.JSX.Element {
+  const useXLChart = true;
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
+  const chartTheme = getStatsChartTheme(resolvedThemeMode);
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [rangeDays, setRangeDays] = useState<7 | 30>(7);
   const [switchWidth, setSwitchWidth] = useState(0);
@@ -33,28 +39,6 @@ export default function StatsScreen(): React.JSX.Element {
     () => bills.filter(bill => bill.userId === currentUserId && !bill.deleted),
     [bills, currentUserId],
   );
-  const overview = useMemo(() => {
-    const currentMonth = dayjs().format('YYYY-MM');
-    const monthIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM') === currentMonth,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === currentMonth,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-
-    return {
-      monthIncome,
-      monthExpense,
-    };
-  }, [userBills]);
   const categoryStats = useMemo(() => {
     const monthBills = userBills.filter(
       bill =>
@@ -88,10 +72,10 @@ export default function StatsScreen(): React.JSX.Element {
     const start = dayjs()
       .subtract(rangeDays - 1, 'day')
       .startOf('day');
+    const startThreshold = start.subtract(1, 'millisecond');
     const rangedBills = userBills.filter(
       bill =>
-        bill.type === type &&
-        dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')),
+        bill.type === type && dayjs(bill.billTime).isAfter(startThreshold),
     );
 
     return Array.from({length: rangeDays}).map((_, index) => {
@@ -105,7 +89,7 @@ export default function StatsScreen(): React.JSX.Element {
         .reduce((sum, bill) => sum + bill.amount, 0);
 
       return {
-        label: date.format(rangeDays <= 7 ? 'MM/DD' : 'DD'),
+        axisLabel: date.format('MM/DD'),
         amount,
         date: date.format('YYYY-MM-DD'),
       };
@@ -116,6 +100,7 @@ export default function StatsScreen(): React.JSX.Element {
       .subtract(rangeDays - 1, 'day')
       .startOf('day');
     const previousStart = currentStart.subtract(rangeDays, 'day');
+    const previousStartThreshold = previousStart.subtract(1, 'millisecond');
 
     return userBills
       .filter(bill => {
@@ -124,12 +109,31 @@ export default function StatsScreen(): React.JSX.Element {
         }
         const billTime = dayjs(bill.billTime);
         return (
-          billTime.isAfter(previousStart.subtract(1, 'millisecond')) &&
-          billTime.isBefore(currentStart)
+          billTime.isAfter(previousStartThreshold) && billTime.isBefore(currentStart)
         );
       })
       .reduce((sum, bill) => sum + bill.amount, 0);
   }, [rangeDays, type, userBills]);
+  const rangeCompareStats = useMemo(() => {
+    const start = dayjs()
+      .subtract(rangeDays - 1, 'day')
+      .startOf('day');
+    const startThreshold = start.subtract(1, 'millisecond');
+    const rangedBills = userBills.filter(bill =>
+      dayjs(bill.billTime).isAfter(startThreshold),
+    );
+    const incomeTotal = rangedBills
+      .filter(bill => bill.type === 'INCOME')
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    const expenseTotal = rangedBills
+      .filter(bill => bill.type === 'EXPENSE')
+      .reduce((sum, bill) => sum + bill.amount, 0);
+    return {incomeTotal, expenseTotal};
+  }, [rangeDays, userBills]);
+  const currentRangeTotal = useMemo(
+    () => trendStats.reduce((sum, item) => sum + item.amount, 0),
+    [trendStats],
+  );
   const indicatorWidth = Math.max((switchWidth - 4) / 2, 0);
   const indicatorTranslateX = typeSwitchAnim.interpolate({
     inputRange: [0, 1],
@@ -143,23 +147,19 @@ export default function StatsScreen(): React.JSX.Element {
   const switchThumbBackground =
     type === 'EXPENSE'
       ? isDark
-        ? 'rgba(224,106,58,0.26)'
-        : 'rgba(224,106,58,0.14)'
+        ? 'rgba(225,144,104,0.24)'
+        : 'rgba(197,106,60,0.15)'
       : isDark
-        ? 'rgba(45,156,116,0.28)'
-        : 'rgba(45,156,116,0.16)';
-  const switchTrackBackground = isDark ? '#101B21' : '#F7F2E8';
-  const switchBorderColor = isDark
-    ? 'rgba(142,148,143,0.28)'
-    : 'rgba(142,148,143,0.2)';
-  const selectedExpenseTextColor = isDark ? '#FFD8CB' : '#8A3E22';
-  const selectedIncomeTextColor = isDark ? '#CBF3E4' : '#216B4E';
-  const rangeTrackBackground = isDark ? '#111B22' : '#FBF7EF';
-  const rangeBorderColor = isDark
-    ? 'rgba(142,148,143,0.26)'
-    : 'rgba(142,148,143,0.2)';
-  const rangeThumbBackground = isDark ? '#2B3646' : '#ECE4FC';
-  const selectedRangeTextColor = isDark ? '#EAF2F0' : '#1F4346';
+        ? 'rgba(89,196,160,0.26)'
+        : 'rgba(29,138,108,0.16)';
+  const switchTrackBackground = chartTheme.panelMutedFill;
+  const switchBorderColor = chartTheme.panelBorder;
+  const selectedExpenseTextColor = isDark ? '#FFCAAF' : '#8D4A2E';
+  const selectedIncomeTextColor = isDark ? '#BBEED9' : '#1E6E54';
+  const rangeTrackBackground = chartTheme.panelMutedFill;
+  const rangeBorderColor = chartTheme.panelBorder;
+  const rangeThumbBackground = colors.surface;
+  const selectedRangeTextColor = colors.text;
 
   useEffect(() => {
     Animated.spring(typeSwitchAnim, {
@@ -237,17 +237,45 @@ export default function StatsScreen(): React.JSX.Element {
         <View
           style={{
             paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 10,
-            gap: 16,
+            paddingTop: 10,
+            paddingBottom: 8,
+            gap: 14,
           }}>
-          <View style={{gap: 4}}>
-            <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-              统计分析
-            </Text>
-            <Text variant="bodyMedium" style={{color: colors.muted}}>
-              用当前数据看消费结构和趋势。
-            </Text>
+          <View style={styles.headerRow}>
+            <View style={{gap: 4}}>
+              <Text variant="headlineSmall" style={{fontWeight: '800', color: colors.text}}>
+                统计分析
+              </Text>
+              <Text variant="bodyMedium" style={{color: colors.muted}}>
+                基于当前账单数据生成消费结构与趋势
+              </Text>
+            </View>
+            <View style={styles.headerTagRow}>
+              <View
+                style={[
+                  styles.headerTag,
+                  {
+                    backgroundColor: chartTheme.panelMutedFill,
+                    borderColor: chartTheme.panelBorder,
+                  },
+                ]}>
+                <Text variant="labelSmall" style={{color: colors.muted}}>
+                  本月
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.headerTag,
+                  {
+                    backgroundColor: chartTheme.panelMutedFill,
+                    borderColor: chartTheme.panelBorder,
+                  },
+                ]}>
+                <Text variant="labelSmall" style={{color: colors.muted}}>
+                  离线数据
+                </Text>
+              </View>
+            </View>
           </View>
 
           <View
@@ -371,54 +399,40 @@ export default function StatsScreen(): React.JSX.Element {
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: 20,
-            paddingTop: 8,
+            paddingTop: 10,
           }}>
           <Animated.View
             style={{
-              gap: 16,
+              gap: 14,
               opacity: contentOpacity,
               transform: [{translateY: contentTranslateY}],
             }}>
-            <View style={{flexDirection: 'row', gap: 12}}>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 24,
-                  backgroundColor: colors.surface,
-                  padding: 16,
-                  gap: 6,
-                }}>
-                <Text style={{color: colors.muted}}>本月收入</Text>
-                <Text
-                  variant="titleLarge"
-                  style={{color: colors.income, fontWeight: '800'}}>
-                  ¥{overview.monthIncome.toFixed(2)}
-                </Text>
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 24,
-                  backgroundColor: colors.surface,
-                  padding: 16,
-                  gap: 6,
-                }}>
-                <Text style={{color: colors.muted}}>本月支出</Text>
-                <Text
-                  variant="titleLarge"
-                  style={{color: colors.expense, fontWeight: '800'}}>
-                  ¥{overview.monthExpense.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            <PieChartCard title={`${month} 分类占比`} data={categoryStats} />
-            <TrendChartCard
-              title={`${rangeDays} 天趋势`}
-              data={trendStats}
+            <StatsSummaryStrip
               type={type}
               rangeDays={rangeDays}
+              totalAmount={currentRangeTotal}
               previousTotal={previousPeriodTotal}
+            />
+            {useXLChart ? (
+              <CashflowTrendXLCard
+                data={trendStats}
+                type={type}
+                rangeDays={rangeDays}
+                previousTotal={previousPeriodTotal}
+              />
+            ) : (
+              <CashflowTrendCard
+                data={trendStats}
+                type={type}
+                rangeDays={rangeDays}
+                previousTotal={previousPeriodTotal}
+              />
+            )}
+            <CategoryDonutCard title={`${month} 分类结构`} data={categoryStats} type={type} />
+            <CompareBarCard
+              rangeDays={rangeDays}
+              incomeTotal={rangeCompareStats.incomeTotal}
+              expenseTotal={rangeCompareStats.expenseTotal}
             />
           </Animated.View>
         </ScrollView>
@@ -426,3 +440,23 @@ export default function StatsScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  headerTagRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 4,
+  },
+  headerTag: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+});

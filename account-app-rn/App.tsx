@@ -1,11 +1,16 @@
 import 'react-native-gesture-handler';
 import React, {useEffect, useMemo} from 'react';
+import {LogBox} from 'react-native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {Provider as PaperProvider} from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
 import {buildPaperTheme, useResolvedThemeMode} from './src/theme';
 import {useAppStore} from './src/store/appStore';
+
+LogBox.ignoreLogs([
+  'Support for defaultProps will be removed from function components in a future major release. Use JavaScript default parameters instead.',
+]);
 
 function Bootstrap(): React.JSX.Element {
   const initialize = useAppStore(state => state.initialize);

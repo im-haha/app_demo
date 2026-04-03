@@ -85,7 +85,7 @@ export interface CategoryStat {
 }
 
 export interface TrendPoint {
-  label: string;
+  axisLabel: string;
   amount: number;
   date: string;
 }

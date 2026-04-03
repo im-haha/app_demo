@@ -587,7 +587,7 @@ export function getTrendData(
       .reduce((sum, bill) => sum + bill.amount, 0);
 
     return {
-      label: date.format(rangeDays <= 7 ? 'MM/DD' : 'DD'),
+      axisLabel: date.format('MM/DD'),
       amount,
       date: date.format('YYYY-MM-DD'),
     };

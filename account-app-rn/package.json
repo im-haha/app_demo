@@ -4,8 +4,7 @@
   "private": true,
   "packageManager": "npm@10.8.2",
   "engines": {
-    "node": ">=20.20.0 <21",
-    "npm": ">=10.8.2 <11"
+    "node": ">=18"
   },
   "overrides": {
     "dayjs": "$dayjs",
@@ -32,6 +31,7 @@
     "@react-navigation/bottom-tabs": "7.2.0",
     "@react-navigation/native": "7.2.2",
     "@react-navigation/native-stack": "7.2.0",
+    "@shopify/react-native-skia": "^1.12.4",
     "@wuba/react-native-echarts": "^3.0.1",
     "dayjs": "^1.11.13",
     "echarts": "^6.0.0",
@@ -41,10 +41,12 @@
     "react-native-gesture-handler": "2.21.2",
     "react-native-haptic-feedback": "^3.0.0",
     "react-native-paper": "5.13.1",
+    "react-native-reanimated": "^3.16.7",
     "react-native-safe-area-context": "4.14.0",
     "react-native-screens": "4.5.0",
     "react-native-svg": "^15.15.4",
     "react-native-vector-icons": "10.2.0",
+    "victory-native": "^41.17.4",
     "yup": "^1.6.1",
     "zustand": "^5.0.2"
   },
@@ -68,8 +70,5 @@
     "prettier": "^3.4.2",
     "react-test-renderer": "18.3.1",
     "typescript": "^5.7.3"
-  },
-  "engines": {
-    "node": ">=18"
   }
 }

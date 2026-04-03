@@ -15,6 +15,7 @@ function buildFiltersKey(filters?: BillFilters): string {
     endDate: filters.endDate ?? null,
     keyword: filters.keyword ?? null,
     accountType: filters.accountType ?? 'ALL',
+    includeTransfers: filters.includeTransfers ?? null,
     minAmount: filters.minAmount ?? null,
     maxAmount: filters.maxAmount ?? null,
     month: filters.month ?? null,

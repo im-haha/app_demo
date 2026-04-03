@@ -19,8 +19,6 @@ import {
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
-import {accountTypeOptions} from '@/utils/constants';
-import {AccountType} from '@/types/bill';
 import {CommonTimePreset, resolveTimeRange, statsTimePresetOptions} from '@/utils/timeRange';
 
 type StatsType = 'INCOME' | 'EXPENSE';
@@ -38,7 +36,8 @@ export default function StatsScreen(): React.JSX.Element {
   );
   const [customEndDate, setCustomEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | 'ALL'>('ALL');
+  const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
+  const [includeTransfers, setIncludeTransfers] = useState(false);
   const [switchWidth, setSwitchWidth] = useState(0);
   const typeSwitchAnim = useRef(
     new Animated.Value(type === 'EXPENSE' ? 0 : 1),
@@ -47,6 +46,7 @@ export default function StatsScreen(): React.JSX.Element {
   const contentTranslateY = useRef(new Animated.Value(0)).current;
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const currentUserId = useAppStore(state => state.currentUserId);
   const getTrendByRange = useAppStore(state => state.getTrendByRange);
   const getCategoryBreakdownByRange = useAppStore(state => state.getCategoryBreakdownByRange);
@@ -59,6 +59,18 @@ export default function StatsScreen(): React.JSX.Element {
         .sort((left, right) => left.sortNum - right.sortNum),
     [categories, currentUserId],
   );
+  const visibleAccounts = useMemo(
+    () =>
+      accounts
+        .filter(account => account.userId === currentUserId && !account.isArchived)
+        .sort((left, right) => {
+          if (left.sortNum !== right.sortNum) {
+            return left.sortNum - right.sortNum;
+          }
+          return left.createdAt.localeCompare(right.createdAt);
+        }),
+    [accounts, currentUserId],
+  );
   const timeRange = useMemo(
     () => resolveTimeRange(timePreset, customStartDate, customEndDate),
     [timePreset, customStartDate, customEndDate],
@@ -66,9 +78,10 @@ export default function StatsScreen(): React.JSX.Element {
   const scopedFilters = useMemo(
     () => ({
       categoryId: selectedCategoryId,
-      accountType: selectedAccountType,
+      accountId: selectedAccountId === 'ALL' ? undefined : selectedAccountId,
+      includeTransfers,
     }),
-    [selectedAccountType, selectedCategoryId],
+    [includeTransfers, selectedAccountId, selectedCategoryId],
   );
   const categoryStats = getCategoryBreakdownByRange(
     timeRange.startDate,
@@ -118,9 +131,9 @@ export default function StatsScreen(): React.JSX.Element {
       : visibleCategories.find(category => category.id === selectedCategoryId)?.name ??
         '全部分类';
   const selectedAccountName =
-    selectedAccountType === 'ALL'
+    selectedAccountId === 'ALL'
       ? '全部账户'
-      : accountTypeOptions.find(item => item.value === selectedAccountType)?.label ??
+      : visibleAccounts.find(account => account.id === selectedAccountId)?.name ??
         '全部账户';
 
   useEffect(() => {
@@ -154,8 +167,9 @@ export default function StatsScreen(): React.JSX.Element {
   }, [
     contentOpacity,
     contentTranslateY,
-    selectedAccountType,
+    selectedAccountId,
     selectedCategoryId,
+    includeTransfers,
     timePreset,
     type,
     customStartDate,
@@ -184,7 +198,8 @@ export default function StatsScreen(): React.JSX.Element {
     setCustomStartDate(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
     setCustomEndDate(dayjs().format('YYYY-MM-DD'));
     setSelectedCategoryId(null);
-    setSelectedAccountType('ALL');
+    setSelectedAccountId('ALL');
+    setIncludeTransfers(false);
   }
 
   return (
@@ -236,8 +251,9 @@ export default function StatsScreen(): React.JSX.Element {
               textStyle={{fontWeight: '600', color: colors.text}}
             />
             <AccountFilterMenu
-              selectedAccountType={selectedAccountType}
-              onChange={setSelectedAccountType}
+              accounts={visibleAccounts}
+              selectedAccountId={selectedAccountId}
+              onChange={setSelectedAccountId}
               chipStyle={[
                 styles.filterChip,
                 {
@@ -319,12 +335,34 @@ export default function StatsScreen(): React.JSX.Element {
           </View>
 
           <FilterSummaryChips
-            summaryText={`${timeRange.label} · ${selectedCategoryName} · ${selectedAccountName}`}
+            summaryText={`${timeRange.label} · ${selectedCategoryName} · ${selectedAccountName} · ${
+              includeTransfers ? '计入转账' : '排除转账'
+            }`}
             onClear={clearFilters}
             clearLabel="清空筛选"
             summaryTextStyle={{color: colors.muted}}
             clearTextStyle={{color: colors.primary}}
           />
+          <Pressable
+            onPress={() => setIncludeTransfers(current => !current)}
+            style={[
+              styles.filterChip,
+              {
+                borderColor: chartTheme.panelBorder,
+                backgroundColor: includeTransfers
+                  ? isDark
+                    ? 'rgba(73,116,98,0.32)'
+                    : 'rgba(29,138,108,0.14)'
+                  : chartTheme.panelMutedFill,
+                alignSelf: 'flex-start',
+                flex: undefined,
+                minWidth: 110,
+              },
+            ]}>
+            <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+              {includeTransfers ? '已计入转账' : '默认排除转账'}
+            </Text>
+          </Pressable>
         </View>
         <ScrollView
           bounces={false}

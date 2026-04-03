@@ -77,6 +77,7 @@ export interface BillFilters {
   endDate?: string;
   keyword?: string;
   accountType?: AccountType | 'ALL';
+  includeTransfers?: boolean;
   minAmount?: number;
   maxAmount?: number;
   month?: string;
@@ -96,6 +97,18 @@ export interface BillListSection {
   data: BillRecord[];
   dayExpense: number;
   dayIncome: number;
+}
+
+export type AccountLedgerDirection =
+  | 'INCOME'
+  | 'EXPENSE'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT';
+
+export interface AccountLedgerEntry {
+  bill: BillRecord;
+  direction: AccountLedgerDirection;
+  signedAmount: number;
 }
 
 export interface BudgetSetting {

@@ -20,5 +20,6 @@ export type RootStackParamList = {
   CategoryManage: undefined;
   AccountList: undefined;
   AccountEdit: {accountId?: number} | undefined;
+  AccountLedger: {accountId: number};
   Profile: undefined;
 };

@@ -26,6 +26,7 @@ export default function HomeScreen(): React.JSX.Element {
   const users = useAppStore(state => state.users);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const overview = useMonthlyOverview(month);
   const budget = useBudgetSummary(month);
   const bills = useRecentBills(5);
@@ -33,6 +34,15 @@ export default function HomeScreen(): React.JSX.Element {
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const accountNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    accounts
+      .filter(account => account.userId === currentUserId)
+      .forEach(account => {
+        map.set(account.id, account.name);
+      });
+    return map;
+  }, [accounts, currentUserId]);
   const budgetBarAnim = useRef(new Animated.Value(0)).current;
   const [budgetTrackWidth, setBudgetTrackWidth] = useState(0);
   const budgetUsageRate = Math.min(Math.max(budget.usageRate, 0), 1);
@@ -227,6 +237,12 @@ export default function HomeScreen(): React.JSX.Element {
                   category={categories.find(
                     category => category.id === item.categoryId,
                   )}
+                  sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+                  transferTargetAccountName={
+                    item.transferTargetAccountId
+                      ? accountNameMap.get(item.transferTargetAccountId)
+                      : undefined
+                  }
                   onPress={() =>
                     navigation.navigate('BillDetail', {
                       billId: item.id,

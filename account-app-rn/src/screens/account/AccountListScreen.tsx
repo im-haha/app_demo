@@ -82,31 +82,40 @@ export default function AccountListScreen({navigation}: Props): React.JSX.Elemen
         {visibleAccounts.length === 0 ? (
           <EmptyState title="暂无账户" description="先新增一个账户再记账。" icon="wallet-outline" />
         ) : (
-          <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 24}}>
-            {visibleAccounts.map(account => {
-              const typeLabel =
-                accountTypeOptions.find(option => option.value === account.type)?.label ?? account.type;
-              const archivedText = account.isArchived ? ' · 已停用' : '';
-              return (
-                <List.Item
-                  key={account.id}
-                  title={account.name}
-                  description={`${typeLabel} · 期初 ${formatCurrency(account.openingBalance)}${archivedText}`}
-                  right={() => (
-                    <View style={{justifyContent: 'center', alignItems: 'flex-end', marginRight: 12}}>
-                      <Text variant="titleSmall" style={{fontWeight: '700', color: colors.text}}>
-                        {formatCurrency(account.currentBalance)}
-                      </Text>
-                      <Text variant="bodySmall" style={{color: colors.muted}}>
-                        {account.includeInTotal ? '计入总资产' : '不计入总资产'}
-                      </Text>
-                    </View>
-                  )}
-                  onPress={() => navigation.navigate('AccountEdit', {accountId: account.id})}
-                />
-              );
-            })}
-          </Card>
+          <View style={{gap: 8}}>
+            <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 24}}>
+              {visibleAccounts.map(account => {
+                const typeLabel =
+                  accountTypeOptions.find(option => option.value === account.type)?.label ?? account.type;
+                const archivedText = account.isArchived ? ' · 已停用' : '';
+                return (
+                  <List.Item
+                    key={account.id}
+                    title={account.name}
+                    description={`${typeLabel} · 期初 ${formatCurrency(account.openingBalance)}${archivedText}`}
+                    right={() => (
+                      <View style={{justifyContent: 'center', alignItems: 'flex-end', marginRight: 12}}>
+                        <Text variant="titleSmall" style={{fontWeight: '700', color: colors.text}}>
+                          {formatCurrency(account.currentBalance)}
+                        </Text>
+                        <Text variant="bodySmall" style={{color: colors.muted}}>
+                          {account.includeInTotal ? '计入总资产' : '不计入总资产'}
+                        </Text>
+                        <Text variant="bodySmall" style={{color: colors.primary}}>
+                          点击看流水
+                        </Text>
+                      </View>
+                    )}
+                    onPress={() => navigation.navigate('AccountLedger', {accountId: account.id})}
+                    onLongPress={() => navigation.navigate('AccountEdit', {accountId: account.id})}
+                  />
+                );
+              })}
+            </Card>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              长按账户可进入编辑。
+            </Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>

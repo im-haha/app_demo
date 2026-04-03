@@ -17,12 +17,12 @@ import {
   TimePresetBar,
 } from '@/components/filters';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
-import {accountTypeOptions, filterTypeOptions} from '@/utils/constants';
+import {filterTypeOptions} from '@/utils/constants';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 import {useBillSections} from '@/store/selectors/billSelectors';
 import {useAppStore} from '@/store/appStore';
 import {formatCurrency} from '@/utils/format';
-import {AccountType, BillFilters, BillListSection} from '@/types/bill';
+import {BillFilters, BillListSection} from '@/types/bill';
 import {BillTimePreset, billTimePresetOptions, resolveTimeRange} from '@/utils/timeRange';
 
 export default function BillListScreen(): React.JSX.Element {
@@ -42,7 +42,7 @@ export default function BillListScreen(): React.JSX.Element {
   );
   const [customEndDate, setCustomEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | 'ALL'>('ALL');
+  const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
   const [filterSwitchWidth, setFilterSwitchWidth] = useState(0);
   const typeIndex = useMemo(
     () => filterTypeOptions.findIndex(item => item.value === type),
@@ -50,6 +50,7 @@ export default function BillListScreen(): React.JSX.Element {
   );
   const filterAnim = useRef(new Animated.Value(typeIndex < 0 ? 0 : typeIndex)).current;
   const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const currentUserId = useAppStore(state => state.currentUserId);
   const visibleCategories = useMemo(
     () =>
@@ -65,6 +66,27 @@ export default function BillListScreen(): React.JSX.Element {
     });
     return map;
   }, [categories]);
+  const accountNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    accounts
+      .filter(account => account.userId === currentUserId)
+      .forEach(account => {
+        map.set(account.id, account.name);
+      });
+    return map;
+  }, [accounts, currentUserId]);
+  const visibleAccounts = useMemo(
+    () =>
+      accounts
+        .filter(account => account.userId === currentUserId && !account.isArchived)
+        .sort((left, right) => {
+          if (left.sortNum !== right.sortNum) {
+            return left.sortNum - right.sortNum;
+          }
+          return left.createdAt.localeCompare(right.createdAt);
+        }),
+    [accounts, currentUserId],
+  );
   const timeRange = useMemo(
     () => resolveTimeRange(timePreset, customStartDate, customEndDate),
     [timePreset, customStartDate, customEndDate],
@@ -74,7 +96,7 @@ export default function BillListScreen(): React.JSX.Element {
       type,
       keyword,
       categoryId: selectedCategoryId,
-      accountType: selectedAccountType,
+      accountId: selectedAccountId === 'ALL' ? undefined : selectedAccountId,
       ...(timePreset === 'THIS_MONTH'
         ? {month: dayjs().format('YYYY-MM')}
         : {
@@ -86,7 +108,7 @@ export default function BillListScreen(): React.JSX.Element {
       type,
       keyword,
       selectedCategoryId,
-      selectedAccountType,
+      selectedAccountId,
       timePreset,
       timeRange.endDate,
       timeRange.startDate,
@@ -105,16 +127,16 @@ export default function BillListScreen(): React.JSX.Element {
       : visibleCategories.find(category => category.id === selectedCategoryId)?.name ??
         '全部分类';
   const selectedAccountName =
-    selectedAccountType === 'ALL'
+    selectedAccountId === 'ALL'
       ? '全部账户'
-      : accountTypeOptions.find(item => item.value === selectedAccountType)?.label ??
+      : visibleAccounts.find(account => account.id === selectedAccountId)?.name ??
         '全部账户';
   const activeFilterSummary = useMemo(() => {
     const summaryParts = [timeRange.label];
     if (selectedCategoryId !== null) {
       summaryParts.push(selectedCategoryName);
     }
-    if (selectedAccountType !== 'ALL') {
+    if (selectedAccountId !== 'ALL') {
       summaryParts.push(selectedAccountName);
     }
     if (keyword.trim()) {
@@ -124,7 +146,7 @@ export default function BillListScreen(): React.JSX.Element {
   }, [
     keyword,
     selectedAccountName,
-    selectedAccountType,
+    selectedAccountId,
     selectedCategoryId,
     selectedCategoryName,
     timeRange.label,
@@ -174,7 +196,7 @@ export default function BillListScreen(): React.JSX.Element {
     setCustomStartDate(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
     setCustomEndDate(dayjs().format('YYYY-MM-DD'));
     setSelectedCategoryId(null);
-    setSelectedAccountType('ALL');
+    setSelectedAccountId('ALL');
   }
 
   function getFilterTextColor(itemType: 'ALL' | 'INCOME' | 'EXPENSE'): string {
@@ -320,8 +342,9 @@ export default function BillListScreen(): React.JSX.Element {
               textStyle={{fontWeight: '600', color: colors.text}}
             />
             <AccountFilterMenu
-              selectedAccountType={selectedAccountType}
-              onChange={setSelectedAccountType}
+              accounts={visibleAccounts}
+              selectedAccountId={selectedAccountId}
+              onChange={setSelectedAccountId}
               chipStyle={{
                 flex: 1,
                 height: 38,
@@ -419,6 +442,12 @@ export default function BillListScreen(): React.JSX.Element {
               <BillCard
                 bill={item}
                 category={categoryMap.get(item.categoryId)}
+                sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+                transferTargetAccountName={
+                  item.transferTargetAccountId
+                    ? accountNameMap.get(item.transferTargetAccountId)
+                    : undefined
+                }
                 onPress={() =>
                   navigation.navigate('BillDetail', {
                     billId: item.id,

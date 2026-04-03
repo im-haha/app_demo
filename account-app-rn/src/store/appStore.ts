@@ -3,6 +3,7 @@ import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
 import {
   Account,
+  AccountLedgerEntry,
   BillFilters,
   BillInput,
   BillListSection,
@@ -29,6 +30,7 @@ import {
   getCategoryStats,
   getCategoryStatsByRange,
   listAccounts,
+  listAccountLedger,
   getIncomeExpenseTotalsByRange,
   getOverviewStats,
   getPreviousPeriodTotalByRange,
@@ -79,6 +81,7 @@ interface AppState extends PersistedAppData {
   replaceCategoryAndRemove: (fromCategoryId: number, toCategoryId: number) => void;
   getBills: (filters?: BillFilters) => BillRecord[];
   getBillSections: (filters?: BillFilters) => BillListSection[];
+  getAccountLedger: (accountId: number) => AccountLedgerEntry[];
   getBillById: (billId: number) => BillRecord | undefined;
   saveBillRecord: (payload: BillInput, billId?: number) => void;
   deleteBillRecord: (billId: number) => void;
@@ -207,6 +210,10 @@ export const useAppStore = create<AppState>()(
       getBillSections: filters => {
         const state = get();
         return listBillSections(state, state.currentUserId, filters);
+      },
+      getAccountLedger: accountId => {
+        const state = get();
+        return listAccountLedger(state, state.currentUserId, accountId);
       },
       getBillById: billId => {
         const state = get();

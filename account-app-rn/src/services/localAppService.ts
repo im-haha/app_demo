@@ -1,6 +1,8 @@
 import dayjs from 'dayjs';
 import {
   Account,
+  AccountLedgerDirection,
+  AccountLedgerEntry,
   AccountType,
   BillFilters,
   BillInput,
@@ -804,6 +806,9 @@ export function listBills(
   const categoryNameMap = new Map<number, string>(
     data.categories.map(category => [category.id, category.name]),
   );
+  const accountNameMap = new Map<number, string>(
+    data.accounts.map(account => [account.id, account.name]),
+  );
 
   return data.bills
     .filter(bill => bill.userId === userId && !bill.deleted)
@@ -836,6 +841,10 @@ export function listBills(
         return false;
       }
 
+      if (filters.includeTransfers === false && bill.isTransfer) {
+        return false;
+      }
+
       if (typeof filters.minAmount === 'number' && bill.amount < filters.minAmount) {
         return false;
       }
@@ -859,6 +868,12 @@ export function listBills(
           bill.merchant,
           categoryNameMap.get(bill.categoryId),
           bill.accountType,
+          bill.accountId ? accountNameMap.get(bill.accountId) : '',
+          bill.transferTargetAccountId
+            ? accountNameMap.get(bill.transferTargetAccountId)
+            : '',
+          bill.isTransfer ? '转账|转入|转出' : '',
+          bill.source,
           bill.amount.toFixed(2),
           billTime,
           bill.tagNames?.join('|'),
@@ -874,6 +889,55 @@ export function listBills(
       return true;
     })
     .sort((left, right) => dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf());
+}
+
+function resolveLedgerDirection(
+  bill: BillRecord,
+  accountId: number,
+): AccountLedgerDirection {
+  if (bill.isTransfer) {
+    return bill.transferTargetAccountId === accountId
+      ? 'TRANSFER_IN'
+      : 'TRANSFER_OUT';
+  }
+  return bill.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
+}
+
+export function listAccountLedger(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  accountId: number,
+): AccountLedgerEntry[] {
+  const userId = ensureCurrentUserId(currentUserId);
+  const targetAccount = data.accounts.find(
+    account => account.id === accountId && account.userId === userId,
+  );
+  if (!targetAccount) {
+    throw new Error('账户不存在');
+  }
+
+  return data.bills
+    .filter(bill => bill.userId === userId && !bill.deleted)
+    .filter(
+      bill =>
+        bill.accountId === accountId || bill.transferTargetAccountId === accountId,
+    )
+    .map(bill => {
+      const direction = resolveLedgerDirection(bill, accountId);
+      const signedAmount =
+        direction === 'INCOME' || direction === 'TRANSFER_IN'
+          ? bill.amount
+          : -bill.amount;
+      return {
+        bill,
+        direction,
+        signedAmount,
+      };
+    })
+    .sort(
+      (left, right) =>
+        dayjs(right.bill.billTime).valueOf() - dayjs(left.bill.billTime).valueOf(),
+    );
 }
 
 export function listBillSections(
@@ -937,10 +1001,25 @@ export function saveBill(
   if (!matchedAccount || matchedAccount.isArchived) {
     throw new Error('请选择可用账户');
   }
+  const matchedTransferTarget =
+    payload.transferTargetAccountId !== null && payload.transferTargetAccountId !== undefined
+      ? userAccounts.find(account => account.id === payload.transferTargetAccountId)
+      : undefined;
+  if (payload.isTransfer) {
+    if (!matchedTransferTarget || matchedTransferTarget.isArchived) {
+      throw new Error('请选择可用的转入账户');
+    }
+    if (matchedTransferTarget.id === matchedAccount.id) {
+      throw new Error('转出与转入账户不能相同');
+    }
+  }
   const normalizedPayload: BillInput = {
     ...payload,
+    type: payload.isTransfer ? 'EXPENSE' : payload.type,
     accountId: matchedAccount.id,
     accountType: matchedAccount.type,
+    isTransfer: Boolean(payload.isTransfer),
+    transferTargetAccountId: payload.isTransfer ? matchedTransferTarget?.id ?? null : null,
   };
 
   if (billId) {
@@ -1002,7 +1081,7 @@ export function getBudgetSummary(
 ): BudgetSummary {
   const userId = ensureCurrentUserId(currentUserId);
   const budget = data.budgets.find(item => item.userId === userId && item.month === month);
-  const spentAmount = listBills(data, userId, {type: 'EXPENSE'})
+  const spentAmount = listBills(data, userId, {type: 'EXPENSE', includeTransfers: false})
     .filter(bill => dayjs(bill.billTime).format('YYYY-MM') === month)
     .reduce((sum, bill) => sum + bill.amount, 0);
 
@@ -1106,7 +1185,7 @@ export function getOverviewStats(
   currentUserId: number | null,
 ): OverviewStats {
   const userId = ensureCurrentUserId(currentUserId);
-  const bills = listBills(data, userId);
+  const bills = listBills(data, userId, {includeTransfers: false});
   const today = dayjs().format('YYYY-MM-DD');
   const currentMonth = dayjs().format('YYYY-MM');
 
@@ -1140,7 +1219,14 @@ export function getCategoryStats(
 ): CategoryStat[] {
   const monthStart = dayjs(month).startOf('month').format('YYYY-MM-DD');
   const monthEnd = dayjs(month).endOf('month').format('YYYY-MM-DD');
-  return getCategoryStatsByRange(data, currentUserId, monthStart, monthEnd, type);
+  return getCategoryStatsByRange(
+    data,
+    currentUserId,
+    monthStart,
+    monthEnd,
+    type,
+    {includeTransfers: false},
+  );
 }
 
 function buildRangeListFilters(
@@ -1190,12 +1276,16 @@ export function getTrendDataByRange(
   filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
 ): TrendPoint[] {
   const normalizedRange = normalizeDateRange(startDate, endDate);
+  const scopedFilters = {
+    includeTransfers: false,
+    ...filters,
+  };
   const bills = getBillsByRange(
     data,
     currentUserId,
     normalizedRange.startDate,
     normalizedRange.endDate,
-    filters,
+    scopedFilters,
   );
 
   return buildStatsTrendPointsByRange(
@@ -1214,8 +1304,12 @@ export function getCategoryStatsByRange(
   type: BillType,
   filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
 ): CategoryStat[] {
-  const bills = getBillsByRange(data, currentUserId, startDate, endDate, {
+  const scopedFilters = {
+    includeTransfers: false,
     ...filters,
+  };
+  const bills = getBillsByRange(data, currentUserId, startDate, endDate, {
+    ...scopedFilters,
     type,
   });
   const total = bills.reduce((sum, bill) => sum + bill.amount, 0);
@@ -1249,6 +1343,10 @@ export function getPreviousPeriodTotalByRange(
   filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
 ): number {
   const normalizedRange = normalizeDateRange(startDate, endDate);
+  const scopedFilters = {
+    includeTransfers: false,
+    ...filters,
+  };
   const currentStart = dayjs(normalizedRange.startDate).startOf('day');
   const previousEnd = currentStart.subtract(1, 'day').format('YYYY-MM-DD');
   const previousStart = dayjs(previousEnd)
@@ -1260,7 +1358,7 @@ export function getPreviousPeriodTotalByRange(
     previousStart,
     previousEnd,
     {
-      ...filters,
+      ...scopedFilters,
       type,
     },
   );
@@ -1275,7 +1373,10 @@ export function getIncomeExpenseTotalsByRange(
   endDate: string,
   filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
 ): RangeIncomeExpenseTotals {
-  const bills = getBillsByRange(data, currentUserId, startDate, endDate, filters);
+  const bills = getBillsByRange(data, currentUserId, startDate, endDate, {
+    includeTransfers: false,
+    ...filters,
+  });
   const incomeTotal = bills
     .filter(bill => bill.type === 'INCOME')
     .reduce((sum, bill) => sum + bill.amount, 0);
@@ -1301,7 +1402,9 @@ export function getTrendData(
     .startOf('day')
     .subtract(safeRangeDays - 1, 'day')
     .format('YYYY-MM-DD');
-  return getTrendDataByRange(data, currentUserId, start, end, type);
+  return getTrendDataByRange(data, currentUserId, start, end, type, {
+    includeTransfers: false,
+  });
 }
 
 export interface AppDataExportPayload {

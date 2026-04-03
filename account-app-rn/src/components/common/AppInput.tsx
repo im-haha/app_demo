@@ -1,6 +1,6 @@
-import React, {useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {TextInput, Text} from 'react-native-paper';
-import {View} from 'react-native';
+import {Keyboard, View} from 'react-native';
 import type {TextInputProps as RNTextInputProps} from 'react-native';
 import Svg, {Circle, Path} from 'react-native-svg';
 import {useThemeColors} from '@/theme';
@@ -73,6 +73,18 @@ function AppInput({
   const colors = useThemeColors();
   const isPasswordField = Boolean(secureTextEntry);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<any>(null);
+  const blockNextFocusRef = useRef(false);
+
+  function handlePressIn(): void {
+    if (!isFocused) {
+      return;
+    }
+    blockNextFocusRef.current = true;
+    inputRef.current?.blur?.();
+    Keyboard.dismiss();
+  }
 
   return (
     <View style={{gap: 8, marginTop: 2}}>
@@ -82,9 +94,21 @@ function AppInput({
         {label}
       </Text>
       <TextInput
+        ref={inputRef}
         key={isPasswordField ? `${label}-${isPasswordVisible ? 'visible' : 'hidden'}` : label}
         value={value}
         onChangeText={onChangeText}
+        onPressIn={handlePressIn}
+        onFocus={() => {
+          if (blockNextFocusRef.current) {
+            blockNextFocusRef.current = false;
+            inputRef.current?.blur?.();
+            Keyboard.dismiss();
+            return;
+          }
+          setIsFocused(true);
+        }}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         secureTextEntry={isPasswordField ? !isPasswordVisible : false}
         keyboardType={keyboardType}

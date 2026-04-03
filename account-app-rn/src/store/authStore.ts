@@ -24,7 +24,6 @@ interface AuthState extends AuthPersistedState {
   logout: () => void;
   getCurrentUser: () => UserProfile | undefined;
   updateProfile: (nickname: string) => void;
-  getCurrentCredentialHash: () => string | null;
   hydrateFromLegacy: (payload: AuthPersistedState) => void;
 }
 
@@ -131,16 +130,6 @@ export const useAuthStore = create<AuthState>()(
           ),
         }));
       },
-      getCurrentCredentialHash: () => {
-        const state = get();
-        if (!state.currentUserId) {
-          return null;
-        }
-        return (
-          state.authCredentials.find(item => item.userId === state.currentUserId)?.passwordHash ??
-          null
-        );
-      },
       hydrateFromLegacy: payload =>
         set(current => {
           if (current.users.length > 0 || current.authCredentials.length > 0) {
@@ -181,4 +170,3 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
-

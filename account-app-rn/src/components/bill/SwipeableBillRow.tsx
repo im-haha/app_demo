@@ -1,6 +1,14 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {Pressable, View} from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
+import ReanimatedSwipeable, {
+  SwipeableMethods,
+} from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  SharedValue,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import {Text} from 'react-native-paper';
 import {useThemeColors} from '@/theme';
 
@@ -16,6 +24,64 @@ interface SwipeableBillRowProps {
   children: React.ReactNode;
 }
 
+const ACTION_WIDTH = 78;
+
+function RightAction({
+  label,
+  backgroundColor,
+  progress,
+  drag,
+  onPress,
+}: {
+  label: string;
+  backgroundColor: string;
+  progress: SharedValue<number>;
+  drag: SharedValue<number>;
+  onPress: () => void;
+}): React.JSX.Element {
+  const style = useAnimatedStyle(() => {
+    const translateX = interpolate(
+      drag.value,
+      [-ACTION_WIDTH * 2, -ACTION_WIDTH, 0],
+      [0, 8, 20],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      progress.value,
+      [0, 0.2, 1],
+      [0, 0.55, 1],
+      Extrapolation.CLAMP,
+    );
+    const scale = interpolate(
+      progress.value,
+      [0, 1],
+      [0.95, 1],
+      Extrapolation.CLAMP,
+    );
+    return {
+      transform: [{translateX}, {scale}],
+      opacity,
+    };
+  }, [drag, progress]);
+
+  return (
+    <Animated.View style={[{width: ACTION_WIDTH}, style]}>
+      <Pressable
+        onPress={onPress}
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor,
+        }}>
+        <Text variant="labelLarge" style={{color: '#FFFFFF', fontWeight: '700'}}>
+          {label}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 export default function SwipeableBillRow({
   rowKey,
   activeRowKey,
@@ -28,7 +94,7 @@ export default function SwipeableBillRow({
   children,
 }: SwipeableBillRowProps): React.JSX.Element {
   const colors = useThemeColors();
-  const swipeableRef = useRef<Swipeable | null>(null);
+  const swipeableRef = useRef<SwipeableMethods | null>(null);
 
   useEffect(() => {
     if (activeRowKey !== null && activeRowKey !== undefined && activeRowKey !== rowKey) {
@@ -68,55 +134,54 @@ export default function SwipeableBillRow({
   }
 
   return (
-    <Swipeable
+    <ReanimatedSwipeable
       ref={swipeableRef}
-      friction={2.2}
-      rightThreshold={36}
+      friction={1.55}
+      rightThreshold={ACTION_WIDTH}
       overshootRight={false}
-      onSwipeableWillOpen={() => onRowOpen?.(rowKey)}
-      onSwipeableClose={() => onRowClose?.(rowKey)}
-      renderRightActions={() => (
+      renderRightActions={(progress, drag) => (
         <View
           style={{
+            width: ACTION_WIDTH * 2,
             flexDirection: 'row',
             alignItems: 'stretch',
             marginLeft: 10,
             borderRadius: 22,
             overflow: 'hidden',
           }}>
-          <Pressable
+          <RightAction
+            label="编辑"
+            backgroundColor={colors.secondary}
+            progress={progress}
+            drag={drag}
             onPress={() => {
               closeRow();
               onEdit();
             }}
-            style={{
-              width: 78,
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: colors.secondary,
-            }}>
-            <Text variant="labelLarge" style={{color: '#FFFFFF', fontWeight: '700'}}>
-              编辑
-            </Text>
-          </Pressable>
-          <Pressable
+          />
+          <RightAction
+            label="删除"
+            backgroundColor={colors.danger}
+            progress={progress}
+            drag={drag}
             onPress={() => {
               closeRow();
               onDelete();
             }}
-            style={{
-              width: 78,
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: colors.danger,
-            }}>
-            <Text variant="labelLarge" style={{color: '#FFFFFF', fontWeight: '700'}}>
-              删除
-            </Text>
-          </Pressable>
+          />
         </View>
-      )}>
+      )}
+      onSwipeableWillOpen={direction => {
+        if (direction === 'right') {
+          onRowOpen?.(rowKey);
+        }
+      }}
+      onSwipeableClose={direction => {
+        if (direction === 'right') {
+          onRowClose?.(rowKey);
+        }
+      }}>
       {contentNode}
-    </Swipeable>
+    </ReanimatedSwipeable>
   );
 }

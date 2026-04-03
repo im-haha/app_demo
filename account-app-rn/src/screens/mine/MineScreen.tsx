@@ -3,6 +3,7 @@ import {Alert, Image, Pressable, ScrollView, StyleSheet, View} from 'react-nativ
 import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAuthStore} from '@/store/authStore';
+import AppInput from '@/components/common/AppInput';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
 import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
@@ -53,10 +54,14 @@ export default function MineScreen(): React.JSX.Element {
   const users = useAuthStore(state => state.users);
   const currentUserId = useAuthStore(state => state.currentUserId);
   const logout = useAuthStore(state => state.logout);
-  const getCurrentCredentialHash = useAuthStore(state => state.getCurrentCredentialHash);
   const themePreference = useThemeStore(state => state.preference);
   const setThemePreference = useThemeStore(state => state.setPreference);
   const [themeDialogVisible, setThemeDialogVisible] = useState(false);
+  const [backupPassphraseModalVisible, setBackupPassphraseModalVisible] = useState(false);
+  const [backupPassphraseAction, setBackupPassphraseAction] = useState<'IMPORT' | 'EXPORT' | null>(
+    null,
+  );
+  const [backupPassphrase, setBackupPassphrase] = useState('');
   const [backupPhase, setBackupPhase] = useState<
     'idle' | 'picking' | 'confirming' | 'importing' | 'exporting'
   >('idle');
@@ -72,15 +77,46 @@ export default function MineScreen(): React.JSX.Element {
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
 
-  function resolveBackupSecret(): string {
-    const secret = getCurrentCredentialHash();
-    if (!secret) {
-      throw new Error('未找到账本凭证，请重新解锁后重试');
+  function openBackupPassphraseModal(action: 'IMPORT' | 'EXPORT'): void {
+    if (backupPhase !== 'idle') {
+      return;
     }
-    return secret;
+    setBackupPassphrase('');
+    setBackupPassphraseAction(action);
+    setBackupPassphraseModalVisible(true);
   }
 
-  async function handleExportBackupFile(): Promise<void> {
+  function closeBackupPassphraseModal(): void {
+    setBackupPassphraseModalVisible(false);
+    setBackupPassphraseAction(null);
+    setBackupPassphrase('');
+  }
+
+  function resolveBackupPassphrase(): string | null {
+    const normalized = backupPassphrase.trim();
+    if (normalized.length < 6) {
+      Alert.alert('口令过短', '备份口令至少 6 位，请重新输入');
+      return null;
+    }
+    return normalized;
+  }
+
+  async function handleBackupPassphraseConfirm(): Promise<void> {
+    const action = backupPassphraseAction;
+    const passphrase = resolveBackupPassphrase();
+    if (!action || !passphrase) {
+      return;
+    }
+
+    closeBackupPassphraseModal();
+    if (action === 'EXPORT') {
+      await handleExportBackupFile(passphrase);
+      return;
+    }
+    await handleImportBackupFile(passphrase);
+  }
+
+  async function handleExportBackupFile(passphrase: string): Promise<void> {
     if (backupPhase !== 'idle') {
       return;
     }
@@ -88,7 +124,7 @@ export default function MineScreen(): React.JSX.Element {
       setBackupPhase('exporting');
       const response = await exportMyData();
       const fileInfo = await exportBackupByShare(response.data, {
-        encryptionSecret: resolveBackupSecret(),
+        encryptionSecret: passphrase,
       });
       Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
     } catch (error: unknown) {
@@ -99,14 +135,14 @@ export default function MineScreen(): React.JSX.Element {
     }
   }
 
-  async function handleImportBackupFile(): Promise<void> {
+  async function handleImportBackupFile(passphrase: string): Promise<void> {
     if (backupPhase !== 'idle') {
       return;
     }
     try {
       setBackupPhase('picking');
       const pickedFile = await pickBackupPayloadFromFile({
-        encryptionSecret: resolveBackupSecret(),
+        encryptionSecret: passphrase,
       });
       if (!pickedFile) {
         setBackupPhase('idle');
@@ -131,7 +167,7 @@ export default function MineScreen(): React.JSX.Element {
             text: '继续导入',
             style: 'destructive',
             onPress: () => {
-              void confirmImportBackup(pickedFile.payload, pickedFile.fileName);
+              void confirmImportBackup(pickedFile.payload, pickedFile.fileName, passphrase);
             },
           },
         ],
@@ -149,13 +185,14 @@ export default function MineScreen(): React.JSX.Element {
   async function confirmImportBackup(
     payload: AppDataExportPayload,
     sourceFileName: string,
+    passphrase: string,
   ): Promise<void> {
     try {
       setBackupPhase('importing');
       const currentPayload = await exportMyData();
       const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
         prefix: 'auto-backup-before-import',
-        encryptionSecret: resolveBackupSecret(),
+        encryptionSecret: passphrase,
       });
       await importMyData(payload);
       Alert.alert(
@@ -340,13 +377,13 @@ export default function MineScreen(): React.JSX.Element {
                     {
                       text: '导入',
                       onPress: () => {
-                        void handleImportBackupFile();
+                        openBackupPassphraseModal('IMPORT');
                       },
                     },
                     {
                       text: '导出',
                       onPress: () => {
-                        void handleExportBackupFile();
+                        openBackupPassphraseModal('EXPORT');
                       },
                     },
                   ])
@@ -417,6 +454,43 @@ export default function MineScreen(): React.JSX.Element {
         </Card>
       </ScrollView>
       <Portal>
+        <Modal
+          visible={backupPassphraseModalVisible}
+          onDismiss={closeBackupPassphraseModal}
+          contentContainerStyle={styles.passphraseModalContainer}
+          style={{backgroundColor: modalMaskColor}}>
+          <View
+            style={[
+              styles.passphraseModalCard,
+              {
+                backgroundColor: modalCardColor,
+                borderColor: modalCardBorder,
+              },
+            ]}>
+            <Text variant="titleMedium" style={{fontWeight: '800', color: colors.text}}>
+              {backupPassphraseAction === 'EXPORT' ? '输入备份口令' : '输入导入口令'}
+            </Text>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              口令需手动保存，导入时必须与导出时一致。
+            </Text>
+            <AppInput
+              label="备份口令"
+              value={backupPassphrase}
+              onChangeText={setBackupPassphrase}
+              secureTextEntry
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              placeholder="至少 6 位"
+            />
+            <View style={styles.passphraseActions}>
+              <Button onPress={closeBackupPassphraseModal}>取消</Button>
+              <Button mode="contained" onPress={() => void handleBackupPassphraseConfirm()}>
+                继续
+              </Button>
+            </View>
+          </View>
+        </Modal>
         <Modal
           visible={themeDialogVisible}
           onDismiss={() => setThemeDialogVisible(false)}
@@ -608,5 +682,24 @@ const styles = StyleSheet.create({
   },
   themeActions: {
     alignItems: 'flex-end',
+  },
+  passphraseModalContainer: {
+    paddingHorizontal: 24,
+  },
+  passphraseModalCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 8,
+  },
+  passphraseActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
 });

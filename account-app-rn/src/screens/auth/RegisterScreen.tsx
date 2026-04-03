@@ -63,12 +63,16 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               label="昵称"
               value={form.nickname}
               onChangeText={nickname => setForm(current => ({...current, nickname}))}
+              autoComplete="off"
+              textContentType="nickname"
               errorText={errors.nickname}
             />
             <AppInput
               label="用户名"
               value={form.username}
               onChangeText={username => setForm(current => ({...current, username}))}
+              autoComplete="username"
+              textContentType="username"
               errorText={errors.username}
             />
             <AppInput
@@ -76,6 +80,9 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               value={form.password}
               onChangeText={password => setForm(current => ({...current, password}))}
               secureTextEntry
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
               errorText={errors.password}
             />
             <AppInput
@@ -83,6 +90,9 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               value={form.confirmPassword}
               onChangeText={confirmPassword => setForm(current => ({...current, confirmPassword}))}
               secureTextEntry
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
               errorText={errors.confirmPassword}
             />
             <AppButton onPress={handleSubmit} loading={loading}>

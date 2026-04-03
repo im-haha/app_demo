@@ -17,7 +17,7 @@
     "android:assemble": "cd android && ./gradlew assembleDebug",
     "android:release": "cd android && ./gradlew clean assembleRelease",
     "ios": "react-native run-ios",
-    "ios:sim": "react-native run-ios --simulator \"iPhone 17\" --no-packager",
+    "ios:sim": "bash ./scripts/run-ios-sim.sh \"iPhone 17\"",
     "ios:pods": "cd ios && bundle exec pod install",
     "start": "react-native start",
     "start:ios": "react-native start",

@@ -59,6 +59,8 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
               label="用户名"
               value={form.username}
               onChangeText={username => setForm(current => ({...current, username}))}
+              autoComplete="username"
+              textContentType="username"
               errorText={errors.username}
             />
             <AppInput
@@ -66,6 +68,8 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
               value={form.password}
               onChangeText={password => setForm(current => ({...current, password}))}
               secureTextEntry
+              autoComplete="password"
+              textContentType="password"
               errorText={errors.password}
             />
             <AppButton onPress={handleSubmit} loading={loading}>

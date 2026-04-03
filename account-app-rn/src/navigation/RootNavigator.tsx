@@ -11,6 +11,8 @@ import BillEditScreen from '@/screens/bill/BillEditScreen';
 import BudgetScreen from '@/screens/budget/BudgetScreen';
 import CategoryManageScreen from '@/screens/category/CategoryManageScreen';
 import ProfileScreen from '@/screens/mine/ProfileScreen';
+import AccountListScreen from '@/screens/account/AccountListScreen';
+import AccountEditScreen from '@/screens/account/AccountEditScreen';
 import {RootStackParamList} from './types';
 import {useAppStore} from '@/store/appStore';
 import {buildNavigationTheme, useResolvedThemeMode, useThemeColors} from '@/theme';
@@ -90,6 +92,16 @@ export default function RootNavigator(): React.JSX.Element {
               name="CategoryManage"
               component={CategoryManageScreen}
               options={{title: '分类管理'}}
+            />
+            <Stack.Screen
+              name="AccountList"
+              component={AccountListScreen}
+              options={{title: '账户管理'}}
+            />
+            <Stack.Screen
+              name="AccountEdit"
+              component={AccountEditScreen}
+              options={{title: '账户编辑'}}
             />
             <Stack.Screen name="Profile" component={ProfileScreen} options={{title: '个人资料'}} />
           </>

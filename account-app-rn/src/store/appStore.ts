@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
 import {
+  Account,
   BillFilters,
   BillInput,
   BillListSection,
@@ -18,12 +19,16 @@ import {
   createCategory,
   createInitialAppData,
   copyLastMonthBudget,
+  createAccount,
   deleteBill,
   deleteCategory,
+  ensureUserDemoData,
   exportAppData,
+  archiveAccount,
   getBudgetSummary,
   getCategoryStats,
   getCategoryStatsByRange,
+  listAccounts,
   getIncomeExpenseTotalsByRange,
   getOverviewStats,
   getPreviousPeriodTotalByRange,
@@ -41,6 +46,7 @@ import {
   replaceCategoryAndDelete,
   registerUser,
   saveBill,
+  updateAccount,
   updateCategory,
   updateNickname,
   upsertBudget,
@@ -55,6 +61,14 @@ interface AppState extends PersistedAppData {
   logout: () => void;
   getCurrentUser: () => UserProfile | undefined;
   updateProfile: (nickname: string) => void;
+  getAccounts: (options?: {includeArchived?: boolean}) => Account[];
+  getAccountById: (accountId: number) => Account | undefined;
+  addAccountRecord: (payload: Pick<Account, 'name' | 'type' | 'openingBalance' | 'includeInTotal'>) => void;
+  editAccountRecord: (
+    accountId: number,
+    payload: Partial<Pick<Account, 'name' | 'type' | 'openingBalance' | 'includeInTotal'>>,
+  ) => void;
+  setAccountArchived: (accountId: number, isArchived: boolean) => void;
   getCategories: (type?: BillType) => Category[];
   addCategory: (payload: Pick<Category, 'type' | 'name' | 'icon' | 'color'>) => void;
   editCategory: (
@@ -152,6 +166,22 @@ export const useAppStore = create<AppState>()(
       },
       updateProfile: nickname =>
         set(state => updateNickname(state, state.currentUserId, nickname)),
+      getAccounts: options => {
+        const state = get();
+        return listAccounts(state, state.currentUserId, options);
+      },
+      getAccountById: accountId => {
+        const state = get();
+        return state.accounts.find(
+          account => account.id === accountId && account.userId === state.currentUserId,
+        );
+      },
+      addAccountRecord: payload =>
+        set(state => createAccount(state, state.currentUserId, payload)),
+      editAccountRecord: (accountId, payload) =>
+        set(state => updateAccount(state, state.currentUserId, accountId, payload)),
+      setAccountArchived: (accountId, isArchived) =>
+        set(state => archiveAccount(state, state.currentUserId, accountId, isArchived)),
       getCategories: type => {
         const state = get();
         return listCategories(state, state.currentUserId, type);
@@ -270,15 +300,25 @@ export const useAppStore = create<AppState>()(
         currentUserId: state.currentUserId,
         token: state.token,
         categories: state.categories,
+        accounts: state.accounts,
         bills: state.bills,
         budgets: state.budgets,
       }),
       onRehydrateStorage: () => () => {
-        useAppStore.setState(current => ({
-          ...current,
-          schemaVersion: current.schemaVersion ?? 2,
-          hydrated: true,
-        }));
+        useAppStore.setState(current => {
+          const normalized = ensureUserDemoData(
+            {
+              ...current,
+              schemaVersion: current.schemaVersion ?? 3,
+              accounts: current.accounts ?? [],
+            },
+            current.currentUserId,
+          );
+          return {
+            ...normalized,
+            hydrated: true,
+          };
+        });
       },
     },
   ),

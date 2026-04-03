@@ -10,10 +10,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'BillAdd'>;
 
 export default function BillAddScreen({navigation}: Props): React.JSX.Element {
   const getCategories = useAppStore(state => state.getCategories);
+  const getAccounts = useAppStore(state => state.getAccounts);
 
   return (
     <BillForm
       categories={getCategories}
+      accounts={getAccounts}
       submitLabel="保存账单"
       onSubmit={async payload => {
         try {

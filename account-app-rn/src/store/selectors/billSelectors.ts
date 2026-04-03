@@ -10,6 +10,7 @@ function buildFiltersKey(filters?: BillFilters): string {
   return JSON.stringify({
     type: filters.type ?? 'ALL',
     categoryId: filters.categoryId ?? null,
+    accountId: filters.accountId ?? null,
     startDate: filters.startDate ?? null,
     endDate: filters.endDate ?? null,
     keyword: filters.keyword ?? null,
@@ -27,10 +28,11 @@ export function useRealBills(filters?: BillFilters): BillRecord[] {
   const currentUserId = useAppStore(state => state.currentUserId);
   const getBills = useAppStore(state => state.getBills);
   const filtersKey = buildFiltersKey(filters);
+  const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;
 
   return useMemo(
-    () => getBills(filters),
-    [getBills, bills, categories, currentUserId, filters, filtersKey],
+    () => (revisionKey ? getBills(filters) : getBills(filters)),
+    [getBills, filters, revisionKey],
   );
 }
 
@@ -45,9 +47,10 @@ export function useBillSections(filters?: BillFilters): BillListSection[] {
   const currentUserId = useAppStore(state => state.currentUserId);
   const getBillSections = useAppStore(state => state.getBillSections);
   const filtersKey = buildFiltersKey(filters);
+  const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;
 
   return useMemo(
-    () => getBillSections(filters),
-    [getBillSections, bills, categories, currentUserId, filters, filtersKey],
+    () => (revisionKey ? getBillSections(filters) : getBillSections(filters)),
+    [getBillSections, filters, revisionKey],
   );
 }

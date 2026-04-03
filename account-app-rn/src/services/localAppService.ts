@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import {
+  Account,
   AccountType,
   BillFilters,
   BillInput,
@@ -24,17 +25,19 @@ export interface PersistedAppData {
   currentUserId: number | null;
   token: string | null;
   categories: Category[];
+  accounts: Account[];
   bills: BillRecord[];
   budgets: BudgetSetting[];
 }
 
 export function createInitialAppData(): PersistedAppData {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     users: [],
     currentUserId: null,
     token: null,
     categories: defaultCategories,
+    accounts: [],
     bills: [],
     budgets: [],
   };
@@ -80,6 +83,181 @@ function findCategoryId(
   return fallback?.id ?? 1;
 }
 
+const DEFAULT_ACCOUNT_TEMPLATES: Array<{name: string; type: AccountType}> = [
+  {name: '日常微信', type: 'WECHAT'},
+  {name: '日常支付宝', type: 'ALIPAY'},
+  {name: '常用银行卡', type: 'BANK_CARD'},
+  {name: '现金钱包', type: 'CASH'},
+];
+
+function buildDefaultAccounts(data: PersistedAppData, userId: number): Account[] {
+  const now = nowString();
+  let accountId = nextId(data.accounts);
+
+  return DEFAULT_ACCOUNT_TEMPLATES.map((template, index) => {
+    const account: Account = {
+      id: accountId,
+      userId,
+      name: template.name,
+      type: template.type,
+      openingBalance: 0,
+      currentBalance: 0,
+      includeInTotal: true,
+      isArchived: false,
+      sortNum: index + 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    accountId += 1;
+    return account;
+  });
+}
+
+function resolveAccountByType(accounts: Account[], type: AccountType): Account | undefined {
+  const activeMatch = accounts.find(account => account.type === type && !account.isArchived);
+  if (activeMatch) {
+    return activeMatch;
+  }
+  return accounts.find(account => !account.isArchived) ?? accounts[0];
+}
+
+function ensureUserAccounts(
+  data: PersistedAppData,
+  userId: number,
+): PersistedAppData {
+  const hasUserAccount = data.accounts.some(account => account.userId === userId);
+  if (hasUserAccount) {
+    return data;
+  }
+
+  return {
+    ...data,
+    accounts: [...data.accounts, ...buildDefaultAccounts(data, userId)],
+  };
+}
+
+function fillMissingBillAccountIds(
+  data: PersistedAppData,
+  userId: number,
+): PersistedAppData {
+  const userAccounts = data.accounts.filter(account => account.userId === userId);
+  if (userAccounts.length === 0) {
+    return data;
+  }
+
+  let changed = false;
+  const nextBills = data.bills.map(bill => {
+    if (bill.userId !== userId || bill.deleted) {
+      return bill;
+    }
+
+    const matchedById =
+      bill.accountId !== null && bill.accountId !== undefined
+        ? userAccounts.find(account => account.id === bill.accountId)
+        : undefined;
+    if (matchedById) {
+      if (bill.accountType !== matchedById.type) {
+        changed = true;
+        return {
+          ...bill,
+          accountType: matchedById.type,
+        };
+      }
+      return bill;
+    }
+
+    const fallbackAccount =
+      resolveAccountByType(userAccounts, bill.accountType) ?? userAccounts[0];
+    if (!fallbackAccount) {
+      return bill;
+    }
+
+    changed = true;
+    return {
+      ...bill,
+      accountId: fallbackAccount.id,
+      accountType: fallbackAccount.type,
+    };
+  });
+
+  if (!changed) {
+    return data;
+  }
+
+  return {
+    ...data,
+    bills: nextBills,
+  };
+}
+
+function roundCurrency(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+function recalculateUserAccountBalances(
+  data: PersistedAppData,
+  userId: number,
+): PersistedAppData {
+  const userAccounts = data.accounts.filter(account => account.userId === userId);
+  if (userAccounts.length === 0) {
+    return data;
+  }
+
+  const balanceMap = new Map<number, number>();
+  userAccounts.forEach(account => {
+    balanceMap.set(account.id, account.openingBalance);
+  });
+
+  data.bills.forEach(bill => {
+    if (bill.userId !== userId || bill.deleted || !bill.accountId) {
+      return;
+    }
+
+    if (bill.isTransfer && bill.transferTargetAccountId) {
+      if (balanceMap.has(bill.accountId)) {
+        balanceMap.set(
+          bill.accountId,
+          (balanceMap.get(bill.accountId) ?? 0) - bill.amount,
+        );
+      }
+      if (balanceMap.has(bill.transferTargetAccountId)) {
+        balanceMap.set(
+          bill.transferTargetAccountId,
+          (balanceMap.get(bill.transferTargetAccountId) ?? 0) + bill.amount,
+        );
+      }
+      return;
+    }
+
+    const delta = bill.type === 'INCOME' ? bill.amount : -bill.amount;
+    if (balanceMap.has(bill.accountId)) {
+      balanceMap.set(bill.accountId, (balanceMap.get(bill.accountId) ?? 0) + delta);
+    }
+  });
+
+  return {
+    ...data,
+    accounts: data.accounts.map(account => {
+      if (account.userId !== userId) {
+        return account;
+      }
+      return {
+        ...account,
+        currentBalance: roundCurrency(balanceMap.get(account.id) ?? account.openingBalance),
+      };
+    }),
+  };
+}
+
+function ensureUserAccountDomainData(
+  data: PersistedAppData,
+  userId: number,
+): PersistedAppData {
+  const withAccounts = ensureUserAccounts(data, userId);
+  const withBillAccounts = fillMissingBillAccountIds(withAccounts, userId);
+  return recalculateUserAccountBalances(withBillAccounts, userId);
+}
+
 function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
   const expenseAmounts = [86, 52, 108, 64, 78, 56, 92];
   const incomeAmounts = [0, 180, 0, 0, 320, 0, 0];
@@ -95,6 +273,7 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
   const expenseCategoryNames = ['餐饮', '交通', '购物', '娱乐', '住房', '通讯', '餐饮'];
   const incomeCategoryNames = ['兼职', '奖金', '转账'];
   const accountTypes: AccountType[] = ['WECHAT', 'ALIPAY', 'BANK_CARD', 'CASH'];
+  const userAccounts = data.accounts.filter(account => account.userId === userId);
   const now = nowString();
   let billId = nextId(data.bills);
   const demoBills: BillRecord[] = [];
@@ -102,6 +281,8 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
   for (let index = 0; index < 7; index += 1) {
     const day = dayjs().subtract(6 - index, 'day');
     const expenseAmount = expenseAmounts[index];
+    const expenseAccountType = accountTypes[index % accountTypes.length];
+    const expenseAccount = resolveAccountByType(userAccounts, expenseAccountType);
     demoBills.push({
       id: billId,
       userId,
@@ -113,7 +294,8 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
         'EXPENSE',
         expenseCategoryNames[index % expenseCategoryNames.length],
       ),
-      accountType: accountTypes[index % accountTypes.length],
+      accountType: expenseAccount?.type ?? expenseAccountType,
+      accountId: expenseAccount?.id ?? null,
       billTime: day.hour(12).minute(18).second(0).format('YYYY-MM-DD HH:mm:ss'),
       remark: expenseRemarks[index],
       deleted: false,
@@ -123,6 +305,8 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
     billId += 1;
 
     if (incomeAmounts[index] > 0) {
+      const incomeAccountType = accountTypes[(index + 1) % accountTypes.length];
+      const incomeAccount = resolveAccountByType(userAccounts, incomeAccountType);
       demoBills.push({
         id: billId,
         userId,
@@ -134,7 +318,8 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
           'INCOME',
           incomeCategoryNames[index % incomeCategoryNames.length],
         ),
-        accountType: accountTypes[(index + 1) % accountTypes.length],
+        accountType: incomeAccount?.type ?? incomeAccountType,
+        accountId: incomeAccount?.id ?? null,
         billTime: day.hour(20).minute(15).second(0).format('YYYY-MM-DD HH:mm:ss'),
         remark: index === 1 ? '夜间接单' : '临时奖金',
         deleted: false,
@@ -149,13 +334,15 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
     dayjs().date() > 3
       ? dayjs().startOf('month').add(2, 'day').hour(10).minute(30).second(0)
       : dayjs().subtract(2, 'day').hour(10).minute(30).second(0);
+  const salaryAccount = resolveAccountByType(userAccounts, 'BANK_CARD');
   demoBills.push({
     id: billId,
     userId,
     type: 'INCOME',
     amount: 6800,
     categoryId: findCategoryId(data, userId, 'INCOME', '工资'),
-    accountType: 'BANK_CARD',
+    accountType: salaryAccount?.type ?? 'BANK_CARD',
+    accountId: salaryAccount?.id ?? null,
     billTime: salaryDate.format('YYYY-MM-DD HH:mm:ss'),
     remark: '本月工资',
     deleted: false,
@@ -171,27 +358,34 @@ export function ensureUserDemoData(
   currentUserId: number | null,
   options?: {enableDemoData?: boolean},
 ): PersistedAppData {
-  if (!currentUserId || !options?.enableDemoData) {
+  if (!currentUserId) {
     return data;
   }
 
-  const hasAnyBill = data.bills.some(bill => bill.userId === currentUserId && !bill.deleted);
+  const dataWithAccounts = ensureUserAccountDomainData(data, currentUserId);
+  if (!options?.enableDemoData) {
+    return dataWithAccounts;
+  }
+
+  const hasAnyBill = dataWithAccounts.bills.some(
+    bill => bill.userId === currentUserId && !bill.deleted,
+  );
   if (hasAnyBill) {
-    return data;
+    return dataWithAccounts;
   }
 
   const now = nowString();
   const month = dayjs().format('YYYY-MM');
-  const demoBills = buildDemoBills(data, currentUserId);
-  const hasBudget = data.budgets.some(
+  const demoBills = buildDemoBills(dataWithAccounts, currentUserId);
+  const hasBudget = dataWithAccounts.budgets.some(
     budget => budget.userId === currentUserId && budget.month === month,
   );
   const nextBudgets = hasBudget
-    ? data.budgets
+    ? dataWithAccounts.budgets
     : [
-        ...data.budgets,
+        ...dataWithAccounts.budgets,
         {
-          id: nextId(data.budgets),
+          id: nextId(dataWithAccounts.budgets),
           userId: currentUserId,
           month,
           amount: 4200,
@@ -200,11 +394,14 @@ export function ensureUserDemoData(
         },
       ];
 
-  return {
-    ...data,
-    bills: [...demoBills, ...data.bills],
-    budgets: nextBudgets,
-  };
+  return ensureUserAccountDomainData(
+    {
+      ...dataWithAccounts,
+      bills: [...demoBills, ...dataWithAccounts.bills],
+      budgets: nextBudgets,
+    },
+    currentUserId,
+  );
 }
 
 export function registerUser(data: PersistedAppData, payload: RegisterPayload): PersistedAppData {
@@ -440,6 +637,162 @@ export function replaceCategoryAndDelete(
   };
 }
 
+function isAccountNameDuplicated(
+  data: PersistedAppData,
+  userId: number,
+  name: string,
+  excludeId?: number,
+): boolean {
+  const normalizedName = name.trim().toLowerCase();
+  return data.accounts.some(account => {
+    if (account.userId !== userId) {
+      return false;
+    }
+    if (excludeId && account.id === excludeId) {
+      return false;
+    }
+    return account.name.trim().toLowerCase() === normalizedName;
+  });
+}
+
+export function listAccounts(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  options?: {includeArchived?: boolean},
+): Account[] {
+  const userId = ensureCurrentUserId(currentUserId);
+  const includeArchived = Boolean(options?.includeArchived);
+  const normalized = ensureUserAccountDomainData(data, userId);
+
+  return normalized.accounts
+    .filter(account => account.userId === userId)
+    .filter(account => (includeArchived ? true : !account.isArchived))
+    .sort((left, right) => left.sortNum - right.sortNum);
+}
+
+export function createAccount(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  payload: Pick<Account, 'name' | 'type' | 'openingBalance' | 'includeInTotal'>,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  const normalizedName = payload.name.trim();
+  if (!normalizedName) {
+    throw new Error('账户名称不能为空');
+  }
+  if (isAccountNameDuplicated(data, userId, normalizedName)) {
+    throw new Error('账户名称不能重复');
+  }
+  if (!Number.isFinite(payload.openingBalance)) {
+    throw new Error('期初余额不合法');
+  }
+
+  const userAccounts = data.accounts.filter(account => account.userId === userId);
+  const now = nowString();
+  const account: Account = {
+    id: nextId(data.accounts),
+    userId,
+    name: normalizedName,
+    type: payload.type,
+    openingBalance: roundCurrency(payload.openingBalance),
+    currentBalance: roundCurrency(payload.openingBalance),
+    includeInTotal: payload.includeInTotal,
+    isArchived: false,
+    sortNum: userAccounts.length + 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return recalculateUserAccountBalances(
+    {
+      ...data,
+      accounts: [...data.accounts, account],
+    },
+    userId,
+  );
+}
+
+export function updateAccount(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  accountId: number,
+  payload: Partial<Pick<Account, 'name' | 'type' | 'openingBalance' | 'includeInTotal'>>,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  const target = data.accounts.find(account => account.id === accountId && account.userId === userId);
+  if (!target) {
+    throw new Error('账户不存在');
+  }
+
+  const nextName = payload.name?.trim();
+  if (nextName !== undefined && !nextName) {
+    throw new Error('账户名称不能为空');
+  }
+  if (nextName && isAccountNameDuplicated(data, userId, nextName, accountId)) {
+    throw new Error('账户名称不能重复');
+  }
+  if (
+    payload.openingBalance !== undefined &&
+    !Number.isFinite(payload.openingBalance)
+  ) {
+    throw new Error('期初余额不合法');
+  }
+
+  const now = nowString();
+  const nextData: PersistedAppData = {
+    ...data,
+    accounts: data.accounts.map(account => {
+      if (account.id !== accountId || account.userId !== userId) {
+        return account;
+      }
+      return {
+        ...account,
+        ...payload,
+        name: nextName ?? account.name,
+        openingBalance:
+          payload.openingBalance !== undefined
+            ? roundCurrency(payload.openingBalance)
+            : account.openingBalance,
+        updatedAt: now,
+      };
+    }),
+  };
+
+  return recalculateUserAccountBalances(nextData, userId);
+}
+
+export function archiveAccount(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  accountId: number,
+  isArchived: boolean,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  const target = data.accounts.find(account => account.id === accountId && account.userId === userId);
+  if (!target) {
+    throw new Error('账户不存在');
+  }
+
+  const activeCount = data.accounts.filter(
+    account => account.userId === userId && !account.isArchived,
+  ).length;
+  if (isArchived && activeCount <= 1 && !target.isArchived) {
+    throw new Error('至少保留一个启用账户');
+  }
+
+  const now = nowString();
+  const nextData: PersistedAppData = {
+    ...data,
+    accounts: data.accounts.map(account =>
+      account.id === accountId && account.userId === userId
+        ? {...account, isArchived, updatedAt: now}
+        : account,
+    ),
+  };
+
+  return recalculateUserAccountBalances(nextData, userId);
+}
+
 export function listBills(
   data: PersistedAppData,
   currentUserId: number | null,
@@ -464,6 +817,10 @@ export function listBills(
       }
 
       if (filters.categoryId !== undefined && filters.categoryId !== null && bill.categoryId !== filters.categoryId) {
+        return false;
+      }
+
+      if (filters.accountId !== undefined && filters.accountId !== null && bill.accountId !== filters.accountId) {
         return false;
       }
 
@@ -564,36 +921,58 @@ export function saveBill(
   billId?: number,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
+  const normalizedData = ensureUserAccountDomainData(data, userId);
   const now = nowString();
 
   if (payload.amount <= 0) {
     throw new Error('金额必须大于 0');
   }
 
+  const userAccounts = normalizedData.accounts.filter(account => account.userId === userId);
+  const matchedAccount =
+    (payload.accountId !== null && payload.accountId !== undefined
+      ? userAccounts.find(account => account.id === payload.accountId)
+      : undefined) ??
+    resolveAccountByType(userAccounts, payload.accountType);
+  if (!matchedAccount || matchedAccount.isArchived) {
+    throw new Error('请选择可用账户');
+  }
+  const normalizedPayload: BillInput = {
+    ...payload,
+    accountId: matchedAccount.id,
+    accountType: matchedAccount.type,
+  };
+
   if (billId) {
-    return {
-      ...data,
-      bills: data.bills.map(bill =>
-        bill.id === billId && bill.userId === userId
-          ? {...bill, ...payload, updatedAt: now}
-          : bill,
-      ),
-    };
+    return recalculateUserAccountBalances(
+      {
+        ...normalizedData,
+        bills: normalizedData.bills.map(bill =>
+          bill.id === billId && bill.userId === userId
+            ? {...bill, ...normalizedPayload, updatedAt: now}
+            : bill,
+        ),
+      },
+      userId,
+    );
   }
 
   const bill: BillRecord = {
-    id: nextId(data.bills),
+    id: nextId(normalizedData.bills),
     userId,
-    ...payload,
+    ...normalizedPayload,
     deleted: false,
     createdAt: now,
     updatedAt: now,
   };
 
-  return {
-    ...data,
-    bills: [bill, ...data.bills],
-  };
+  return recalculateUserAccountBalances(
+    {
+      ...normalizedData,
+      bills: [bill, ...normalizedData.bills],
+    },
+    userId,
+  );
 }
 
 export function deleteBill(
@@ -602,14 +981,18 @@ export function deleteBill(
   billId: number,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
+  const normalizedData = ensureUserAccountDomainData(data, userId);
   const now = nowString();
 
-  return {
-    ...data,
-    bills: data.bills.map(bill =>
-      bill.id === billId && bill.userId === userId ? {...bill, deleted: true, updatedAt: now} : bill,
-    ),
-  };
+  return recalculateUserAccountBalances(
+    {
+      ...normalizedData,
+      bills: normalizedData.bills.map(bill =>
+        bill.id === billId && bill.userId === userId ? {...bill, deleted: true, updatedAt: now} : bill,
+      ),
+    },
+    userId,
+  );
 }
 
 export function getBudgetSummary(
@@ -925,6 +1308,7 @@ export interface AppDataExportPayload {
   schemaVersion: number;
   exportedAt: string;
   userId: number;
+  accounts: Account[];
   categories: Category[];
   bills: BillRecord[];
   budgets: BudgetSetting[];
@@ -935,6 +1319,7 @@ export function exportAppData(
   currentUserId: number | null,
 ): AppDataExportPayload {
   const userId = ensureCurrentUserId(currentUserId);
+  const accounts = data.accounts.filter(account => account.userId === userId);
   const categories = data.categories.filter(
     category => category.userId === null || category.userId === userId,
   );
@@ -945,6 +1330,7 @@ export function exportAppData(
     schemaVersion: data.schemaVersion,
     exportedAt: nowString(),
     userId,
+    accounts,
     categories,
     bills,
     budgets,
@@ -961,14 +1347,41 @@ export function importAppData(
     throw new Error('导入数据格式不正确');
   }
 
+  const importedAccounts = Array.isArray((payload as Partial<AppDataExportPayload>).accounts)
+    ? (payload as Partial<AppDataExportPayload>).accounts ?? []
+    : [];
   const importedCategories = Array.isArray(payload.categories) ? payload.categories : [];
   const importedBills = Array.isArray(payload.bills) ? payload.bills : [];
   const importedBudgets = Array.isArray(payload.budgets) ? payload.budgets : [];
   const now = nowString();
 
+  const accountsWithoutUser = data.accounts.filter(account => account.userId !== userId);
   const categoriesWithoutUser = data.categories.filter(category => category.userId !== userId);
   const billsWithoutUser = data.bills.filter(bill => bill.userId !== userId);
   const budgetsWithoutUser = data.budgets.filter(budget => budget.userId !== userId);
+
+  let nextAccountId = nextId(data.accounts);
+  const accountIdMapping = new Map<number, number>();
+  const normalizedUserAccounts: Account[] = importedAccounts
+    .filter(account => account.userId !== null && account.userId !== undefined)
+    .map((account, index) => {
+      const normalized: Account = {
+        ...account,
+        id: nextAccountId,
+        userId,
+        name: (account.name ?? '').trim() || `账户${index + 1}`,
+        openingBalance: roundCurrency(account.openingBalance ?? 0),
+        currentBalance: roundCurrency(account.currentBalance ?? account.openingBalance ?? 0),
+        includeInTotal: account.includeInTotal !== false,
+        isArchived: Boolean(account.isArchived),
+        sortNum: Number.isFinite(account.sortNum) ? account.sortNum : index + 1,
+        createdAt: account.createdAt ?? now,
+        updatedAt: now,
+      };
+      accountIdMapping.set(account.id, nextAccountId);
+      nextAccountId += 1;
+      return normalized;
+    });
 
   let nextCategoryId = nextId(data.categories);
   const categoryIdMapping = new Map<number, number>();
@@ -990,6 +1403,21 @@ export function importAppData(
   let nextBillId = nextId(data.bills);
   const normalizedUserBills: BillRecord[] = importedBills.map(bill => {
     const mappedCategoryId = categoryIdMapping.get(bill.categoryId);
+    const mappedAccountId =
+      bill.accountId !== undefined && bill.accountId !== null
+        ? accountIdMapping.get(bill.accountId)
+        : undefined;
+    const mappedTransferTargetAccountId =
+      bill.transferTargetAccountId !== undefined &&
+      bill.transferTargetAccountId !== null
+        ? accountIdMapping.get(bill.transferTargetAccountId)
+        : undefined;
+    const fallbackAccount =
+      normalizedUserAccounts.find(
+        account => account.type === bill.accountType && !account.isArchived,
+      ) ??
+      normalizedUserAccounts.find(account => !account.isArchived) ??
+      normalizedUserAccounts[0];
     const fallbackCategoryId =
       normalizedUserCategories.find(category => category.type === bill.type)?.id ??
       categoriesWithoutUser.find(category => category.type === bill.type)?.id ??
@@ -1000,6 +1428,10 @@ export function importAppData(
       id: nextBillId,
       userId,
       categoryId: mappedCategoryId ?? fallbackCategoryId,
+      accountId: mappedAccountId ?? fallbackAccount?.id ?? null,
+      accountType: fallbackAccount?.type ?? bill.accountType ?? 'OTHER',
+      transferTargetAccountId:
+        mappedTransferTargetAccountId ?? bill.transferTargetAccountId ?? null,
       remark: bill.remark ?? '',
       source: bill.source ?? 'IMPORT',
       updatedAt: now,
@@ -1020,10 +1452,14 @@ export function importAppData(
     return normalized;
   });
 
-  return {
-    ...data,
-    categories: [...categoriesWithoutUser, ...normalizedUserCategories],
-    bills: [...billsWithoutUser, ...normalizedUserBills],
-    budgets: [...budgetsWithoutUser, ...normalizedUserBudgets],
-  };
+  return ensureUserAccountDomainData(
+    {
+      ...data,
+      accounts: [...accountsWithoutUser, ...normalizedUserAccounts],
+      categories: [...categoriesWithoutUser, ...normalizedUserCategories],
+      bills: [...billsWithoutUser, ...normalizedUserBills],
+      budgets: [...budgetsWithoutUser, ...normalizedUserBudgets],
+    },
+    userId,
+  );
 }

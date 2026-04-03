@@ -1,4 +1,4 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Alert, Pressable, ScrollView, View} from 'react-native';
 import {Menu, SegmentedButtons, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
@@ -6,12 +6,13 @@ import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import BillTypeSwitch from './BillTypeSwitch';
 import CategorySelector from './CategorySelector';
-import {BillInput, BillType, Category} from '@/types/bill';
+import {Account, BillInput, BillType, Category} from '@/types/bill';
 import {accountTypeOptions} from '@/utils/constants';
 
 interface Props {
   initialValue?: BillInput;
   categories: (type: BillType) => Category[];
+  accounts: () => Account[];
   onSubmit: (payload: BillInput) => void;
   submitLabel: string;
 }
@@ -42,6 +43,7 @@ function isValidClock(clockText: string): boolean {
 export default function BillForm({
   initialValue,
   categories,
+  accounts,
   onSubmit,
   submitLabel,
 }: Props): React.JSX.Element {
@@ -49,7 +51,7 @@ export default function BillForm({
   const [type, setType] = useState<BillType>(initialValue?.type ?? 'EXPENSE');
   const [amount, setAmount] = useState(initialValue ? String(initialValue.amount) : '');
   const [categoryId, setCategoryId] = useState<number | null>(initialValue?.categoryId ?? null);
-  const [accountType, setAccountType] = useState(initialValue?.accountType ?? 'WECHAT');
+  const [accountId, setAccountId] = useState<number | null>(initialValue?.accountId ?? null);
   const [billDate, setBillDate] = useState(
     initialDate.isValid() ? initialDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
   );
@@ -70,24 +72,39 @@ export default function BillForm({
   });
 
   const categoryOptions = useMemo(() => categories(type), [categories, type]);
+  const accountOptions = accounts();
   const selectedCategoryId = categoryId ?? categoryOptions[0]?.id ?? null;
-  const accountLabel =
-    accountTypeOptions.find(item => item.value === accountType)?.label ?? '选择账户';
+  const selectedAccount = useMemo(
+    () =>
+      accountOptions.find(account => account.id === accountId) ??
+      (initialValue?.accountType
+        ? accountOptions.find(account => account.type === initialValue.accountType)
+        : undefined) ??
+      accountOptions[0],
+    [accountId, accountOptions, initialValue?.accountType],
+  );
+  const accountLabel = selectedAccount?.name ?? '请选择账户';
   const accountButtons = useMemo(
     () => [
       {
-        value: accountType,
+        value: selectedAccount ? String(selectedAccount.id) : 'UNSET',
         label: accountLabel,
       },
     ],
-    [accountLabel, accountType],
+    [accountLabel, selectedAccount],
   );
   const openAccountMenu = useCallback(() => setAccountMenuVisible(true), []);
   const closeAccountMenu = useCallback(() => setAccountMenuVisible(false), []);
-  const handleAccountTypeSelect = useCallback((nextAccountType: string) => {
-    setAccountType(nextAccountType as typeof accountType);
+  const handleAccountSelect = useCallback((nextAccountId: number) => {
+    setAccountId(nextAccountId);
     setAccountMenuVisible(false);
   }, []);
+
+  useEffect(() => {
+    if (selectedAccount && selectedAccount.id !== accountId) {
+      setAccountId(selectedAccount.id);
+    }
+  }, [accountId, selectedAccount]);
 
   const handleTypeChange = useCallback(
     (next: BillType) => {
@@ -137,6 +154,10 @@ export default function BillForm({
       Alert.alert('提示', '请选择分类');
       return;
     }
+    if (!selectedAccount) {
+      Alert.alert('提示', '请先创建并选择账户');
+      return;
+    }
 
     const dateText = billDate.trim();
     const clockText = billClock.trim();
@@ -161,22 +182,20 @@ export default function BillForm({
       type,
       amount: Number(parsedAmount.toFixed(2)),
       categoryId: selectedCategoryId,
-      accountType,
+      accountType: selectedAccount.type,
       billTime: dateTimeText,
       remark: remark.trim(),
       source: initialValue?.source ?? 'MANUAL',
-      accountId: initialValue?.accountId ?? null,
+      accountId: selectedAccount.id,
       merchant: initialValue?.merchant,
       tagNames: initialValue?.tagNames,
       isTransfer: initialValue?.isTransfer,
       transferTargetAccountId: initialValue?.transferTargetAccountId,
     });
   }, [
-    accountType,
     amount,
     billClock,
     billDate,
-    initialValue?.accountId,
     initialValue?.isTransfer,
     initialValue?.merchant,
     initialValue?.source,
@@ -184,6 +203,7 @@ export default function BillForm({
     initialValue?.transferTargetAccountId,
     onSubmit,
     remark,
+    selectedAccount,
     selectedCategoryId,
     type,
   ]);
@@ -213,16 +233,18 @@ export default function BillForm({
           onDismiss={closeAccountMenu}
           anchor={
             <SegmentedButtons
-              value={accountType}
+              value={selectedAccount ? String(selectedAccount.id) : 'UNSET'}
               onValueChange={openAccountMenu}
               buttons={accountButtons}
             />
           }>
-          {accountTypeOptions.map(item => (
+          {accountOptions.map(item => (
             <Menu.Item
-              key={item.value}
-              title={item.label}
-              onPress={() => handleAccountTypeSelect(item.value)}
+              key={item.id}
+              title={`${item.name} · ${
+                accountTypeOptions.find(option => option.value === item.type)?.label ?? item.type
+              }`}
+              onPress={() => handleAccountSelect(item.id)}
             />
           ))}
         </Menu>

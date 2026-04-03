@@ -231,6 +231,23 @@ export default function MineScreen(): React.JSX.Element {
             onPress={() => navigation.navigate('Budget')}
           />
           <List.Item
+            title="账户管理"
+            description="管理具体账户、余额与停用状态"
+            left={() => (
+              <View
+                style={[
+                  styles.menuIcon,
+                  {
+                    borderColor: isDark ? '#42513D' : '#D5E3CE',
+                    backgroundColor: isDark ? '#273223' : '#EEF6EA',
+                  },
+                ]}>
+                <Text style={{color: colors.primary, fontWeight: '700'}}>¥</Text>
+              </View>
+            )}
+            onPress={() => navigation.navigate('AccountList')}
+          />
+          <List.Item
             title="分类管理"
             description="新增、编辑和删除分类"
             left={() => (

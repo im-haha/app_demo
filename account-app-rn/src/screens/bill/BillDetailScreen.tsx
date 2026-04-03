@@ -22,6 +22,7 @@ export default function BillDetailScreen({
   const bills = useAppStore(state => state.bills);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const bill = useMemo(
     () =>
       bills.find(
@@ -34,6 +35,9 @@ export default function BillDetailScreen({
   );
 
   const currentCategory = categories.find(item => item.id === bill?.categoryId);
+  const currentAccount = accounts.find(
+    item => item.id === bill?.accountId && item.userId === currentUserId,
+  );
 
   if (!bill) {
     return (
@@ -88,10 +92,9 @@ export default function BillDetailScreen({
             <View style={{gap: 12}}>
               <Text>
                 账户：
-                {
+                {currentAccount?.name ??
                   accountTypeOptions.find(item => item.value === bill.accountType)
-                    ?.label
-                }
+                    ?.label}
               </Text>
               <Text>
                 时间：{formatDateLabel(bill.billTime)}{' '}

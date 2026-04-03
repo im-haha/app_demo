@@ -18,5 +18,7 @@ export type RootStackParamList = {
   BillDetail: {billId: number};
   Budget: undefined;
   CategoryManage: undefined;
+  AccountList: undefined;
+  AccountEdit: {accountId?: number} | undefined;
   Profile: undefined;
 };

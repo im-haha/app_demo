@@ -32,6 +32,7 @@ function isValidBackupPayload(payload: any): payload is AppDataExportPayload {
       typeof payload === 'object' &&
       typeof payload.schemaVersion === 'number' &&
       typeof payload.userId === 'number' &&
+      (payload.accounts === undefined || Array.isArray(payload.accounts)) &&
       Array.isArray(payload.categories) &&
       Array.isArray(payload.bills) &&
       Array.isArray(payload.budgets),

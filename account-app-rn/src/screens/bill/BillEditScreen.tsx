@@ -23,6 +23,7 @@ export default function BillEditScreen({navigation, route}: Props): React.JSX.El
     [bills, currentUserId, route.params.billId],
   );
   const getCategories = useAppStore(state => state.getCategories);
+  const getAccounts = useAppStore(state => state.getAccounts);
 
   if (!bill) {
     return <EmptyState title="账单不存在" description="这条账单可能已经被删除。" />;
@@ -35,10 +36,17 @@ export default function BillEditScreen({navigation, route}: Props): React.JSX.El
         amount: bill.amount,
         categoryId: bill.categoryId,
         accountType: bill.accountType,
+        accountId: bill.accountId ?? null,
         billTime: bill.billTime,
         remark: bill.remark,
+        source: bill.source,
+        merchant: bill.merchant,
+        tagNames: bill.tagNames,
+        isTransfer: bill.isTransfer,
+        transferTargetAccountId: bill.transferTargetAccountId,
       }}
       categories={getCategories}
+      accounts={getAccounts}
       submitLabel="保存修改"
       onSubmit={async payload => {
         try {

@@ -7,6 +7,20 @@ export type AccountType =
   | 'WECHAT'
   | 'OTHER';
 
+export interface Account {
+  id: number;
+  userId: number;
+  name: string;
+  type: AccountType;
+  openingBalance: number;
+  currentBalance: number;
+  includeInTotal: boolean;
+  isArchived: boolean;
+  sortNum: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Category {
   id: number;
   userId: number | null;
@@ -58,6 +72,7 @@ export interface BillInput {
 export interface BillFilters {
   type?: BillType | 'ALL';
   categoryId?: number | null;
+  accountId?: number | null;
   startDate?: string;
   endDate?: string;
   keyword?: string;

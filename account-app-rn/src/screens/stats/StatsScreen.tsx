@@ -192,6 +192,10 @@ export default function StatsScreen(): React.JSX.Element {
       ),
     [scopedBills, timeRange.endDate, timeRange.startDate, type],
   );
+  const currentTypeBills = useMemo(
+    () => currentRangeBills.filter(bill => bill.type === type),
+    [currentRangeBills, type],
+  );
   const previousPeriodTotal = useMemo(() => {
     const currentStart = dayjs(timeRange.startDate).startOf('day');
     const previousEnd = currentStart.subtract(1, 'day').endOf('day');
@@ -222,8 +226,8 @@ export default function StatsScreen(): React.JSX.Element {
     return {incomeTotal, expenseTotal};
   }, [currentRangeBills]);
   const currentRangeTotal = useMemo(
-    () => trendStats.reduce((sum, item) => sum + item.amount, 0),
-    [trendStats],
+    () => currentTypeBills.reduce((sum, bill) => sum + bill.amount, 0),
+    [currentTypeBills],
   );
   const indicatorWidth = Math.max((switchWidth - 4) / 2, 0);
   const indicatorTranslateX = typeSwitchAnim.interpolate({

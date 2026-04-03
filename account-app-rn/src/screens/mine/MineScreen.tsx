@@ -1,7 +1,7 @@
 import React, {useMemo, useState} from 'react';
 import {Alert, Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Button, Card, List, Modal, Portal, Text, TextInput} from 'react-native-paper';
+import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
@@ -9,6 +9,11 @@ import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
 import {exportMyData, importMyData} from '@/api/data';
 import {AppDataExportPayload} from '@/services/localAppService';
+import {
+  exportBackupByShare,
+  pickBackupPayloadFromFile,
+  writeBackupPayloadToFile,
+} from '@/services/fileBackupService';
 
 const DEFAULT_AVATAR = require('../../assets/images/avatar-default.jpeg');
 const THEME_OPTIONS: ThemePreference[] = ['SYSTEM', 'LIGHT', 'DARK'];
@@ -51,10 +56,7 @@ export default function MineScreen(): React.JSX.Element {
   const themePreference = useThemeStore(state => state.preference);
   const setThemePreference = useThemeStore(state => state.setPreference);
   const [themeDialogVisible, setThemeDialogVisible] = useState(false);
-  const [dataDialogVisible, setDataDialogVisible] = useState(false);
-  const [dataDialogMode, setDataDialogMode] = useState<'EXPORT' | 'IMPORT'>('EXPORT');
-  const [exportPayloadText, setExportPayloadText] = useState('');
-  const [importPayloadText, setImportPayloadText] = useState('');
+  const [backupLoading, setBackupLoading] = useState(false);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -67,32 +69,74 @@ export default function MineScreen(): React.JSX.Element {
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
 
-  async function handleOpenExportDialog(): Promise<void> {
+  async function handleExportBackupFile(): Promise<void> {
+    if (backupLoading) {
+      return;
+    }
     try {
+      setBackupLoading(true);
       const response = await exportMyData();
-      setDataDialogMode('EXPORT');
-      setExportPayloadText(JSON.stringify(response.data, null, 2));
-      setDataDialogVisible(true);
+      const fileInfo = await exportBackupByShare(response.data);
+      Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
     } catch (error: any) {
       Alert.alert('导出失败', error?.message ?? '请稍后重试');
+    } finally {
+      setBackupLoading(false);
     }
   }
 
-  function handleOpenImportDialog(): void {
-    setDataDialogMode('IMPORT');
-    setImportPayloadText('');
-    setDataDialogVisible(true);
+  async function handleImportBackupFile(): Promise<void> {
+    if (backupLoading) {
+      return;
+    }
+    try {
+      setBackupLoading(true);
+      const pickedFile = await pickBackupPayloadFromFile();
+      if (!pickedFile) {
+        return;
+      }
+
+      const importedAtText = pickedFile.payload.exportedAt
+        ? `导出时间：${pickedFile.payload.exportedAt}\n`
+        : '';
+
+      Alert.alert(
+        '确认导入备份',
+        `${importedAtText}文件：${pickedFile.fileName}\n导入会覆盖当前账户账本数据，是否继续？`,
+        [
+          {text: '取消', style: 'cancel'},
+          {
+            text: '继续导入',
+            style: 'destructive',
+            onPress: () => {
+              void confirmImportBackup(pickedFile.payload, pickedFile.fileName);
+            },
+          },
+        ],
+      );
+    } catch (error: any) {
+      Alert.alert('导入失败', error?.message ?? '请检查备份文件');
+    } finally {
+      setBackupLoading(false);
+    }
   }
 
-  async function handleConfirmImport(): Promise<void> {
+  async function confirmImportBackup(
+    payload: AppDataExportPayload,
+    sourceFileName: string,
+  ): Promise<void> {
     try {
-      const parsedPayload = JSON.parse(importPayloadText) as AppDataExportPayload;
-      await importMyData(parsedPayload);
-      setDataDialogVisible(false);
-      setImportPayloadText('');
-      Alert.alert('导入成功', '已覆盖当前账户数据。');
+      const currentPayload = await exportMyData();
+      const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
+        prefix: 'auto-backup-before-import',
+      });
+      await importMyData(payload);
+      Alert.alert(
+        '导入成功',
+        `已从 ${sourceFileName} 导入数据。\n导入前自动备份：${autoBackup.fileName}`,
+      );
     } catch (error: any) {
-      Alert.alert('导入失败', error?.message ?? '请检查 JSON 内容格式');
+      Alert.alert('导入失败', error?.message ?? '请检查备份文件后重试');
     }
   }
 
@@ -228,7 +272,7 @@ export default function MineScreen(): React.JSX.Element {
           />
           <List.Item
             title="数据备份"
-            description="导出 JSON 或导入恢复"
+            description="导出备份文件或选择文件导入"
             left={() => (
               <View
                 style={[
@@ -246,12 +290,14 @@ export default function MineScreen(): React.JSX.Element {
                 {text: '取消', style: 'cancel'},
                 {
                   text: '导入',
-                  onPress: handleOpenImportDialog,
+                  onPress: () => {
+                    void handleImportBackupFile();
+                  },
                 },
                 {
                   text: '导出',
                   onPress: () => {
-                    void handleOpenExportDialog();
+                    void handleExportBackupFile();
                   },
                 },
               ])
@@ -401,47 +447,6 @@ export default function MineScreen(): React.JSX.Element {
             </View>
           </View>
         </Modal>
-        <Modal
-          visible={dataDialogVisible}
-          onDismiss={() => setDataDialogVisible(false)}
-          contentContainerStyle={styles.themeModalContainer}
-          style={{backgroundColor: modalMaskColor}}>
-          <View
-            style={[
-              styles.themeModalCard,
-              {
-                backgroundColor: modalCardColor,
-                borderColor: modalCardBorder,
-              },
-            ]}>
-            <Text variant="titleLarge" style={{fontWeight: '800', color: colors.text}}>
-              {dataDialogMode === 'EXPORT' ? '导出数据' : '导入数据'}
-            </Text>
-            <Text variant="bodySmall" style={{color: colors.muted}}>
-              {dataDialogMode === 'EXPORT'
-                ? '可复制下方 JSON 作为离线备份。'
-                : '粘贴导出 JSON，确认后会覆盖当前账户数据。'}
-            </Text>
-            <TextInput
-              mode="outlined"
-              multiline
-              value={dataDialogMode === 'EXPORT' ? exportPayloadText : importPayloadText}
-              onChangeText={setImportPayloadText}
-              editable={dataDialogMode === 'IMPORT'}
-              placeholder={dataDialogMode === 'IMPORT' ? '请粘贴导出的 JSON 数据' : undefined}
-              outlineStyle={{borderRadius: 16}}
-              style={styles.backupInput}
-            />
-            <View style={styles.dataActions}>
-              {dataDialogMode === 'IMPORT' ? (
-                <Button mode="contained" onPress={() => void handleConfirmImport()}>
-                  确认导入
-                </Button>
-              ) : null}
-              <Button onPress={() => setDataDialogVisible(false)}>关闭</Button>
-            </View>
-          </View>
-        </Modal>
       </Portal>
     </SafeAreaView>
   );
@@ -554,15 +559,5 @@ const styles = StyleSheet.create({
   },
   themeActions: {
     alignItems: 'flex-end',
-  },
-  backupInput: {
-    minHeight: 180,
-    maxHeight: 300,
-  },
-  dataActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 10,
   },
 });

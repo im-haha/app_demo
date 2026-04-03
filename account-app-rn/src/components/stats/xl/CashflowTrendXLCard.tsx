@@ -38,9 +38,7 @@ interface Props {
 interface TrendDatum {
   x: number;
   dailyAmount: number;
-  rawDailyAmount: number;
   cumulativeAmount: number;
-  rawCumulativeAmount: number;
   axisLabel: string;
   date: string;
 }
@@ -106,70 +104,30 @@ export default function CashflowTrendXLCard({
   const summaryColor = type === 'EXPENSE' ? colors.expense : colors.income;
   const summaryNoun = type === 'EXPENSE' ? '支出' : '收入';
 
-  const baseDailyData = useMemo(
-    () =>
-      data.map((item, index) => ({
-        x: index + 1,
-        rawDailyAmount: item.amount,
-        axisLabel: item.axisLabel,
-        date: item.date,
-      })),
-    [data],
-  );
-  const rawTotalAmount = useMemo(
-    () => baseDailyData.reduce((sum, item) => sum + item.rawDailyAmount, 0),
-    [baseDailyData],
-  );
-
-  const dailyFloorValue = useMemo(() => {
-    const maxRaw = Math.max(...baseDailyData.map(item => item.rawDailyAmount), 0);
-    if (maxRaw <= 0) {
-      return 0.01;
-    }
-    return Math.max(0.01, Math.min(50, maxRaw * 0.01));
-  }, [baseDailyData]);
-
-  const cumulativeFloorValue = useMemo(() => {
-    let running = 0;
-    let maxRunning = 0;
-    for (const item of baseDailyData) {
-      running += item.rawDailyAmount;
-      maxRunning = Math.max(maxRunning, running);
-    }
-    if (maxRunning <= 0) {
-      return dailyFloorValue;
-    }
-    return Math.max(dailyFloorValue, Math.min(50, maxRunning * 0.005));
-  }, [baseDailyData, dailyFloorValue]);
-
   const chartData = useMemo<TrendDatum[]>(() => {
-    let runningRaw = 0;
-    return baseDailyData.map(item => {
-      runningRaw += item.rawDailyAmount;
-      const dailyAmount = item.rawDailyAmount <= 0 ? dailyFloorValue : item.rawDailyAmount;
-      const rawCumulativeAmount = runningRaw;
-      const cumulativeAmount =
-        rawCumulativeAmount <= 0 ? cumulativeFloorValue : rawCumulativeAmount;
-
+    let running = 0;
+    return data.map((item, index) => {
+      running += item.amount;
       return {
-        x: item.x,
-        dailyAmount,
-        rawDailyAmount: item.rawDailyAmount,
-        cumulativeAmount,
-        rawCumulativeAmount,
+        x: index + 1,
+        dailyAmount: item.amount,
+        cumulativeAmount: running,
         axisLabel: item.axisLabel,
         date: item.date,
       };
     });
-  }, [baseDailyData, cumulativeFloorValue, dailyFloorValue]);
+  }, [data]);
 
-  const totalAmount = rawTotalAmount;
+  const totalAmount = useMemo(
+    () => chartData.reduce((sum, item) => sum + item.dailyAmount, 0),
+    [chartData],
+  );
   const dailyAverage = useMemo(
     () => (rangeDays > 0 ? totalAmount / rangeDays : 0),
     [rangeDays, totalAmount],
   );
   const hasAnyData = chartData.length > 0;
-  const hasRealData = chartData.some(item => item.rawDailyAmount > 0);
+  const hasRealData = chartData.some(item => item.dailyAmount > 0);
   const leadingZeroDays = useMemo(() => countLeadingZeroDays(data), [data]);
   const shouldEnableEffectiveWindow =
     hasRealData && rangeDays >= 30 && leadingZeroDays >= 8;
@@ -206,7 +164,7 @@ export default function CashflowTrendXLCard({
     [displayData],
   );
   const mainYAxisMax = useMemo(
-    () => computeYAxisMax(mainMaxValue, 3),
+    () => Math.max(1, computeYAxisMax(mainMaxValue, 3)),
     [mainMaxValue],
   );
   const mainYAxisTicks = useMemo(
@@ -222,7 +180,7 @@ export default function CashflowTrendXLCard({
     [displayData],
   );
   const subYAxisMax = useMemo(
-    () => computeYAxisMax(subMaxValue, 2),
+    () => Math.max(1, computeYAxisMax(subMaxValue, 2)),
     [subMaxValue],
   );
   const subYAxisTicks = useMemo(
@@ -471,10 +429,10 @@ export default function CashflowTrendXLCard({
                     {activePoint.axisLabel}
                   </Text>
                   <Text variant="bodySmall" style={{color: colors.muted}}>
-                    当日{summaryNoun} {formatCurrency(activePoint.rawDailyAmount)}
+                    当日{summaryNoun} {formatCurrency(activePoint.dailyAmount)}
                   </Text>
                   <Text variant="bodySmall" style={{color: colors.muted}}>
-                    累计{summaryNoun} {formatCurrency(activePoint.rawCumulativeAmount)}
+                    累计{summaryNoun} {formatCurrency(activePoint.cumulativeAmount)}
                   </Text>
                 </View>
               ) : null}

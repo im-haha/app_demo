@@ -6,6 +6,7 @@ import {
   Dialog,
   IconButton,
   Portal,
+  RadioButton,
   SegmentedButtons,
   Text,
 } from 'react-native-paper';
@@ -13,7 +14,12 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import AppInput from '@/components/common/AppInput';
 import EmptyState from '@/components/common/EmptyState';
 import {useAppStore} from '@/store/appStore';
-import {createCategory, deleteCategory, updateCategory} from '@/api/category';
+import {
+  createCategory,
+  deleteCategory,
+  replaceCategoryAndDelete,
+  updateCategory,
+} from '@/api/category';
 import {useThemeColors} from '@/theme';
 
 const iconOptions = ['food-fork-drink', 'shopping', 'car', 'cash', 'gift', 'shape'];
@@ -24,10 +30,13 @@ export default function CategoryManageScreen(): React.JSX.Element {
   const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
   const [visible, setVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
+  const [replaceTargetCategoryId, setReplaceTargetCategoryId] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [icon, setIcon] = useState(iconOptions[0]);
   const [color, setColor] = useState(colorOptions[0]);
   const allCategories = useAppStore(state => state.categories);
+  const allBills = useAppStore(state => state.bills);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useMemo(
     () =>
@@ -36,6 +45,10 @@ export default function CategoryManageScreen(): React.JSX.Element {
         .filter(category => category.userId === null || category.userId === currentUserId)
         .sort((left, right) => left.sortNum - right.sortNum),
     [type, allCategories, currentUserId],
+  );
+  const replaceTargetOptions = useMemo(
+    () => categories.filter(category => category.id !== deletingCategoryId),
+    [categories, deletingCategoryId],
   );
 
   function openCreate() {
@@ -60,13 +73,67 @@ export default function CategoryManageScreen(): React.JSX.Element {
       return;
     }
 
-    if (editingId) {
-      await updateCategory(editingId, {name, icon, color});
-    } else {
-      await createCategory({type, name, icon, color});
+    try {
+      if (editingId) {
+        await updateCategory(editingId, {name, icon, color});
+      } else {
+        await createCategory({type, name, icon, color});
+      }
+      setVisible(false);
+    } catch (error: any) {
+      Alert.alert('保存失败', error?.message ?? '请稍后重试');
+    }
+  }
+
+  function isCategoryUsed(categoryId: number): boolean {
+    return allBills.some(
+      bill =>
+        bill.userId === currentUserId &&
+        !bill.deleted &&
+        bill.categoryId === categoryId,
+    );
+  }
+
+  function openReplaceDialog(categoryId: number): void {
+    const defaultTarget = categories.find(category => category.id !== categoryId)?.id ?? null;
+    setDeletingCategoryId(categoryId);
+    setReplaceTargetCategoryId(defaultTarget);
+  }
+
+  async function handleDelete(categoryId: number): Promise<void> {
+    if (isCategoryUsed(categoryId)) {
+      openReplaceDialog(categoryId);
+      return;
     }
 
-    setVisible(false);
+    Alert.alert('删除分类', '确认删除该分类？', [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteCategory(categoryId);
+          } catch (error: any) {
+            Alert.alert('删除失败', error?.message ?? '请稍后重试');
+          }
+        },
+      },
+    ]);
+  }
+
+  async function confirmReplaceAndDelete(): Promise<void> {
+    if (!deletingCategoryId || !replaceTargetCategoryId) {
+      Alert.alert('提示', '请选择迁移目标分类');
+      return;
+    }
+    try {
+      await replaceCategoryAndDelete(deletingCategoryId, replaceTargetCategoryId);
+      setDeletingCategoryId(null);
+      setReplaceTargetCategoryId(null);
+    } catch (error: any) {
+      Alert.alert('删除失败', error?.message ?? '请稍后重试');
+    }
   }
 
   return (
@@ -112,18 +179,9 @@ export default function CategoryManageScreen(): React.JSX.Element {
                     <IconButton
                       icon="delete-outline"
                       iconColor={colors.danger}
-                      onPress={() =>
-                        Alert.alert('删除分类', '确认删除该分类？', [
-                          {text: '取消', style: 'cancel'},
-                          {
-                            text: '删除',
-                            style: 'destructive',
-                            onPress: async () => {
-                              await deleteCategory(category.id);
-                            },
-                          },
-                        ])
-                      }
+                      onPress={() => {
+                        void handleDelete(category.id);
+                      }}
                     />
                   </View>
                 )}
@@ -172,6 +230,50 @@ export default function CategoryManageScreen(): React.JSX.Element {
           <Dialog.Actions>
             <Button onPress={() => setVisible(false)}>取消</Button>
             <Button onPress={handleSave}>保存</Button>
+          </Dialog.Actions>
+        </Dialog>
+        <Dialog
+          visible={Boolean(deletingCategoryId)}
+          onDismiss={() => {
+            setDeletingCategoryId(null);
+            setReplaceTargetCategoryId(null);
+          }}>
+          <Dialog.Title>迁移后删除分类</Dialog.Title>
+          <Dialog.Content style={{gap: 10}}>
+            <Text variant="bodyMedium" style={{color: colors.muted}}>
+              该分类已有账单，请先选择迁移目标分类。
+            </Text>
+            {replaceTargetOptions.length === 0 ? (
+              <Text style={{color: colors.danger}}>没有可迁移的分类，请先新增分类。</Text>
+            ) : (
+              <RadioButton.Group
+                value={
+                  replaceTargetCategoryId ? String(replaceTargetCategoryId) : ''
+                }
+                onValueChange={value =>
+                  setReplaceTargetCategoryId(Number(value))
+                }>
+                {replaceTargetOptions.map(category => (
+                  <RadioButton.Item
+                    key={category.id}
+                    label={category.name}
+                    value={String(category.id)}
+                  />
+                ))}
+              </RadioButton.Group>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button
+              onPress={() => {
+                setDeletingCategoryId(null);
+                setReplaceTargetCategoryId(null);
+              }}>
+              取消
+            </Button>
+            <Button onPress={() => void confirmReplaceAndDelete()}>
+              迁移并删除
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

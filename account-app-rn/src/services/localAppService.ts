@@ -3,6 +3,7 @@ import {
   AccountType,
   BillFilters,
   BillInput,
+  BillListSection,
   BillRecord,
   BillType,
   BudgetSetting,
@@ -16,6 +17,7 @@ import {RegisterPayload, UserProfile} from '@/types/user';
 import {defaultCategories} from '@/data/defaultCategories';
 
 export interface PersistedAppData {
+  schemaVersion: number;
   users: UserProfile[];
   currentUserId: number | null;
   token: string | null;
@@ -26,6 +28,7 @@ export interface PersistedAppData {
 
 export function createInitialAppData(): PersistedAppData {
   return {
+    schemaVersion: 2,
     users: [],
     currentUserId: null,
     token: null,
@@ -164,8 +167,9 @@ function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
 export function ensureUserDemoData(
   data: PersistedAppData,
   currentUserId: number | null,
+  options?: {enableDemoData?: boolean},
 ): PersistedAppData {
-  if (!currentUserId) {
+  if (!currentUserId || !options?.enableDemoData) {
     return data;
   }
 
@@ -277,12 +281,38 @@ export function listCategories(
     .sort((left, right) => left.sortNum - right.sortNum);
 }
 
+function isCategoryNameDuplicated(
+  data: PersistedAppData,
+  userId: number,
+  type: BillType,
+  name: string,
+  excludeId?: number,
+): boolean {
+  const normalizedName = name.trim().toLowerCase();
+  return data.categories.some(category => {
+    if (category.userId !== userId || category.type !== type) {
+      return false;
+    }
+    if (excludeId && category.id === excludeId) {
+      return false;
+    }
+    return category.name.trim().toLowerCase() === normalizedName;
+  });
+}
+
 export function createCategory(
   data: PersistedAppData,
   currentUserId: number | null,
   payload: Pick<Category, 'type' | 'name' | 'icon' | 'color'>,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
+  const categoryName = payload.name.trim();
+  if (!categoryName) {
+    throw new Error('分类名称不能为空');
+  }
+  if (isCategoryNameDuplicated(data, userId, payload.type, categoryName)) {
+    throw new Error('同类型分类名称不能重复');
+  }
   const now = nowString();
   const sameTypeCount = data.categories.filter(
     item => item.userId === userId && item.type === payload.type,
@@ -292,7 +322,7 @@ export function createCategory(
     id: nextId(data.categories),
     userId,
     type: payload.type,
-    name: payload.name.trim(),
+    name: categoryName,
     icon: payload.icon,
     color: payload.color,
     sortNum: sameTypeCount + 1,
@@ -314,6 +344,22 @@ export function updateCategory(
   payload: Partial<Pick<Category, 'name' | 'icon' | 'color'>>,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
+  const targetCategory = data.categories.find(
+    category => category.id === categoryId && category.userId === userId,
+  );
+  if (!targetCategory) {
+    throw new Error('分类不存在');
+  }
+  const nextName = payload.name?.trim();
+  if (nextName !== undefined && !nextName) {
+    throw new Error('分类名称不能为空');
+  }
+  if (
+    nextName &&
+    isCategoryNameDuplicated(data, userId, targetCategory.type, nextName, categoryId)
+  ) {
+    throw new Error('同类型分类名称不能重复');
+  }
   const now = nowString();
 
   return {
@@ -326,7 +372,7 @@ export function updateCategory(
       return {
         ...category,
         ...payload,
-        name: payload.name ? payload.name.trim() : category.name,
+        name: nextName ?? category.name,
         updatedAt: now,
       };
     }),
@@ -342,7 +388,7 @@ export function deleteCategory(
   const used = data.bills.some(bill => bill.categoryId === categoryId && !bill.deleted);
 
   if (used) {
-    throw new Error('已有账单使用该分类，暂不能删除');
+    throw new Error('已有账单使用该分类，请先迁移后再删除');
   }
 
   return {
@@ -353,12 +399,56 @@ export function deleteCategory(
   };
 }
 
+export function replaceCategoryAndDelete(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  fromCategoryId: number,
+  toCategoryId: number,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  if (fromCategoryId === toCategoryId) {
+    throw new Error('迁移目标分类不能和原分类相同');
+  }
+
+  const fromCategory = data.categories.find(
+    category => category.id === fromCategoryId && category.userId === userId,
+  );
+  if (!fromCategory) {
+    throw new Error('待删除分类不存在');
+  }
+  const toCategory = data.categories.find(category => category.id === toCategoryId);
+  if (!toCategory) {
+    throw new Error('迁移目标分类不存在');
+  }
+  if (toCategory.type !== fromCategory.type) {
+    throw new Error('迁移目标分类类型不一致');
+  }
+  const now = nowString();
+
+  return {
+    ...data,
+    bills: data.bills.map(bill =>
+      bill.userId === userId && !bill.deleted && bill.categoryId === fromCategoryId
+        ? {...bill, categoryId: toCategoryId, updatedAt: now}
+        : bill,
+    ),
+    categories: data.categories.filter(
+      category => !(category.id === fromCategoryId && category.userId === userId),
+    ),
+  };
+}
+
 export function listBills(
   data: PersistedAppData,
   currentUserId: number | null,
   filters?: BillFilters,
 ): BillRecord[] {
   const userId = ensureCurrentUserId(currentUserId);
+  const keyword = filters?.keyword?.trim().toLowerCase();
+  const merchantKeyword = filters?.merchantKeyword?.trim().toLowerCase();
+  const categoryNameMap = new Map<number, string>(
+    data.categories.map(category => [category.id, category.name]),
+  );
 
   return data.bills
     .filter(bill => bill.userId === userId && !bill.deleted)
@@ -371,7 +461,7 @@ export function listBills(
         return false;
       }
 
-      if (filters.categoryId && bill.categoryId !== filters.categoryId) {
+      if (filters.categoryId !== undefined && filters.categoryId !== null && bill.categoryId !== filters.categoryId) {
         return false;
       }
 
@@ -383,13 +473,86 @@ export function listBills(
         return false;
       }
 
-      if (filters.keyword && !bill.remark.toLowerCase().includes(filters.keyword.toLowerCase().trim())) {
+      if (filters.accountType && filters.accountType !== 'ALL' && bill.accountType !== filters.accountType) {
         return false;
+      }
+
+      if (typeof filters.minAmount === 'number' && bill.amount < filters.minAmount) {
+        return false;
+      }
+
+      if (typeof filters.maxAmount === 'number' && bill.amount > filters.maxAmount) {
+        return false;
+      }
+
+      if (filters.month && dayjs(bill.billTime).format('YYYY-MM') !== filters.month) {
+        return false;
+      }
+
+      if (merchantKeyword && !(bill.merchant ?? '').toLowerCase().includes(merchantKeyword)) {
+        return false;
+      }
+
+      if (keyword) {
+        const billTime = dayjs(bill.billTime).format('YYYY-MM-DD HH:mm');
+        const searchableText = [
+          bill.remark,
+          bill.merchant,
+          categoryNameMap.get(bill.categoryId),
+          bill.accountType,
+          bill.amount.toFixed(2),
+          billTime,
+          bill.tagNames?.join('|'),
+        ]
+          .filter(Boolean)
+          .join('|')
+          .toLowerCase();
+        if (!searchableText.includes(keyword)) {
+          return false;
+        }
       }
 
       return true;
     })
     .sort((left, right) => dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf());
+}
+
+export function listBillSections(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  filters?: BillFilters,
+): BillListSection[] {
+  const bills = listBills(data, currentUserId, filters);
+  const today = dayjs().format('YYYY-MM-DD');
+  const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+  const sectionMap = new Map<string, BillListSection>();
+
+  bills.forEach(bill => {
+    const date = dayjs(bill.billTime).format('YYYY-MM-DD');
+    const title = date === today ? '今天' : date === yesterday ? '昨天' : date;
+    const section = sectionMap.get(date);
+    if (section) {
+      section.data.push(bill);
+      if (bill.type === 'INCOME') {
+        section.dayIncome += bill.amount;
+      } else {
+        section.dayExpense += bill.amount;
+      }
+      return;
+    }
+
+    sectionMap.set(date, {
+      title,
+      date,
+      data: [bill],
+      dayExpense: bill.type === 'EXPENSE' ? bill.amount : 0,
+      dayIncome: bill.type === 'INCOME' ? bill.amount : 0,
+    });
+  });
+
+  return Array.from(sectionMap.values()).sort(
+    (left, right) => dayjs(right.date).valueOf() - dayjs(left.date).valueOf(),
+  );
 }
 
 export function saveBill(
@@ -505,6 +668,54 @@ export function upsertBudget(
   };
 }
 
+export function listBudgetHistory(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  limit = 12,
+): BudgetSummary[] {
+  const userId = ensureCurrentUserId(currentUserId);
+  const monthSet = new Set<string>();
+  const currentMonth = dayjs().format('YYYY-MM');
+  monthSet.add(currentMonth);
+  monthSet.add(dayjs(currentMonth).subtract(1, 'month').format('YYYY-MM'));
+
+  data.budgets.forEach(budget => {
+    if (budget.userId === userId) {
+      monthSet.add(budget.month);
+    }
+  });
+
+  data.bills.forEach(bill => {
+    if (bill.userId === userId && !bill.deleted && bill.type === 'EXPENSE') {
+      monthSet.add(dayjs(bill.billTime).format('YYYY-MM'));
+    }
+  });
+
+  const sortedMonths = Array.from(monthSet).sort((left, right) =>
+    dayjs(right).valueOf() - dayjs(left).valueOf(),
+  );
+
+  return sortedMonths.slice(0, limit).map(month => getBudgetSummary(data, userId, month));
+}
+
+export function copyLastMonthBudget(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  month: string,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  const previousMonth = dayjs(month).subtract(1, 'month').format('YYYY-MM');
+  const previousBudget = data.budgets.find(
+    item => item.userId === userId && item.month === previousMonth,
+  );
+
+  if (!previousBudget || previousBudget.amount <= 0) {
+    throw new Error('上月没有可沿用的预算');
+  }
+
+  return upsertBudget(data, userId, month, previousBudget.amount);
+}
+
 export function getOverviewStats(
   data: PersistedAppData,
   currentUserId: number | null,
@@ -575,11 +786,11 @@ export function getTrendData(
   type: BillType,
 ): TrendPoint[] {
   const userId = ensureCurrentUserId(currentUserId);
-  const end = dayjs().startOf('day');
-  const start = end.subtract(rangeDays, 'day');
+  const end = dayjs().endOf('day');
+  const start = dayjs().startOf('day').subtract(rangeDays - 1, 'day');
   const bills = listBills(data, userId, {type}).filter(bill =>
     dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')) &&
-    dayjs(bill.billTime).isBefore(end),
+    dayjs(bill.billTime).isBefore(end.add(1, 'millisecond')),
   );
 
   return Array.from({length: rangeDays}).map((_, index) => {
@@ -594,4 +805,111 @@ export function getTrendData(
       date: date.format('YYYY-MM-DD'),
     };
   });
+}
+
+export interface AppDataExportPayload {
+  schemaVersion: number;
+  exportedAt: string;
+  userId: number;
+  categories: Category[];
+  bills: BillRecord[];
+  budgets: BudgetSetting[];
+}
+
+export function exportAppData(
+  data: PersistedAppData,
+  currentUserId: number | null,
+): AppDataExportPayload {
+  const userId = ensureCurrentUserId(currentUserId);
+  const categories = data.categories.filter(
+    category => category.userId === null || category.userId === userId,
+  );
+  const bills = data.bills.filter(bill => bill.userId === userId);
+  const budgets = data.budgets.filter(budget => budget.userId === userId);
+
+  return {
+    schemaVersion: data.schemaVersion,
+    exportedAt: nowString(),
+    userId,
+    categories,
+    bills,
+    budgets,
+  };
+}
+
+export function importAppData(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  payload: AppDataExportPayload,
+): PersistedAppData {
+  const userId = ensureCurrentUserId(currentUserId);
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('导入数据格式不正确');
+  }
+
+  const importedCategories = Array.isArray(payload.categories) ? payload.categories : [];
+  const importedBills = Array.isArray(payload.bills) ? payload.bills : [];
+  const importedBudgets = Array.isArray(payload.budgets) ? payload.budgets : [];
+  const now = nowString();
+
+  const categoriesWithoutUser = data.categories.filter(category => category.userId !== userId);
+  const billsWithoutUser = data.bills.filter(bill => bill.userId !== userId);
+  const budgetsWithoutUser = data.budgets.filter(budget => budget.userId !== userId);
+
+  let nextCategoryId = nextId(data.categories);
+  const categoryIdMapping = new Map<number, number>();
+  const normalizedUserCategories: Category[] = importedCategories
+    .filter(category => category.userId !== null)
+    .map(category => {
+      const normalized: Category = {
+        ...category,
+        id: nextCategoryId,
+        userId,
+        name: category.name.trim(),
+        updatedAt: now,
+      };
+      categoryIdMapping.set(category.id, nextCategoryId);
+      nextCategoryId += 1;
+      return normalized;
+    });
+
+  let nextBillId = nextId(data.bills);
+  const normalizedUserBills: BillRecord[] = importedBills.map(bill => {
+    const mappedCategoryId = categoryIdMapping.get(bill.categoryId);
+    const fallbackCategoryId =
+      normalizedUserCategories.find(category => category.type === bill.type)?.id ??
+      categoriesWithoutUser.find(category => category.type === bill.type)?.id ??
+      1;
+
+    const normalized: BillRecord = {
+      ...bill,
+      id: nextBillId,
+      userId,
+      categoryId: mappedCategoryId ?? fallbackCategoryId,
+      remark: bill.remark ?? '',
+      source: bill.source ?? 'IMPORT',
+      updatedAt: now,
+    };
+    nextBillId += 1;
+    return normalized;
+  });
+
+  let nextBudgetId = nextId(data.budgets);
+  const normalizedUserBudgets: BudgetSetting[] = importedBudgets.map(budget => {
+    const normalized: BudgetSetting = {
+      ...budget,
+      id: nextBudgetId,
+      userId,
+      updatedAt: now,
+    };
+    nextBudgetId += 1;
+    return normalized;
+  });
+
+  return {
+    ...data,
+    categories: [...categoriesWithoutUser, ...normalizedUserCategories],
+    bills: [...billsWithoutUser, ...normalizedUserBills],
+    budgets: [...budgetsWithoutUser, ...normalizedUserBudgets],
+  };
 }

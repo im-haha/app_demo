@@ -4,6 +4,7 @@ import {createJSONStorage, persist} from 'zustand/middleware';
 import {
   BillFilters,
   BillInput,
+  BillListSection,
   BillRecord,
   BillType,
   BudgetSummary,
@@ -16,17 +17,23 @@ import {LoginPayload, RegisterPayload, UserProfile} from '@/types/user';
 import {
   createCategory,
   createInitialAppData,
+  copyLastMonthBudget,
   deleteBill,
   deleteCategory,
-  ensureUserDemoData,
+  exportAppData,
   getBudgetSummary,
   getCategoryStats,
   getOverviewStats,
   getTrendData,
+  importAppData,
+  listBudgetHistory,
   listBills,
+  listBillSections,
   listCategories,
   loginUser,
+  AppDataExportPayload,
   PersistedAppData,
+  replaceCategoryAndDelete,
   registerUser,
   saveBill,
   updateCategory,
@@ -50,15 +57,21 @@ interface AppState extends PersistedAppData {
     payload: Partial<Pick<Category, 'name' | 'icon' | 'color'>>,
   ) => void;
   removeCategory: (categoryId: number) => void;
+  replaceCategoryAndRemove: (fromCategoryId: number, toCategoryId: number) => void;
   getBills: (filters?: BillFilters) => BillRecord[];
+  getBillSections: (filters?: BillFilters) => BillListSection[];
   getBillById: (billId: number) => BillRecord | undefined;
   saveBillRecord: (payload: BillInput, billId?: number) => void;
   deleteBillRecord: (billId: number) => void;
   setBudget: (month: string, amount: number) => void;
   getBudgetByMonth: (month: string) => BudgetSummary;
+  getBudgetHistory: (limit?: number) => BudgetSummary[];
+  copyBudgetFromLastMonth: (month: string) => void;
   getOverview: () => OverviewStats;
   getCategoryBreakdown: (month: string, type: BillType) => CategoryStat[];
   getTrend: (rangeDays: number, type: BillType) => TrendPoint[];
+  exportCurrentUserData: () => AppDataExportPayload;
+  importCurrentUserData: (payload: AppDataExportPayload) => void;
 }
 
 const initialData = createInitialAppData();
@@ -120,9 +133,22 @@ export const useAppStore = create<AppState>()(
         set(state => updateCategory(state, state.currentUserId, categoryId, payload)),
       removeCategory: categoryId =>
         set(state => deleteCategory(state, state.currentUserId, categoryId)),
+      replaceCategoryAndRemove: (fromCategoryId, toCategoryId) =>
+        set(state =>
+          replaceCategoryAndDelete(
+            state,
+            state.currentUserId,
+            fromCategoryId,
+            toCategoryId,
+          ),
+        ),
       getBills: filters => {
         const state = get();
         return listBills(state, state.currentUserId, filters);
+      },
+      getBillSections: filters => {
+        const state = get();
+        return listBillSections(state, state.currentUserId, filters);
       },
       getBillById: billId => {
         const state = get();
@@ -139,6 +165,12 @@ export const useAppStore = create<AppState>()(
         const state = get();
         return getBudgetSummary(state, state.currentUserId, month);
       },
+      getBudgetHistory: limit => {
+        const state = get();
+        return listBudgetHistory(state, state.currentUserId, limit);
+      },
+      copyBudgetFromLastMonth: month =>
+        set(state => copyLastMonthBudget(state, state.currentUserId, month)),
       getOverview: () => {
         const state = get();
         return getOverviewStats(state, state.currentUserId);
@@ -151,11 +183,18 @@ export const useAppStore = create<AppState>()(
         const state = get();
         return getTrendData(state, state.currentUserId, rangeDays, type);
       },
+      exportCurrentUserData: () => {
+        const state = get();
+        return exportAppData(state, state.currentUserId);
+      },
+      importCurrentUserData: payload =>
+        set(state => importAppData(state, state.currentUserId, payload)),
     }),
     {
       name: storageKeys.app,
       storage: createJSONStorage(() => AsyncStorage),
       partialize: state => ({
+        schemaVersion: state.schemaVersion,
         users: state.users,
         currentUserId: state.currentUserId,
         token: state.token,
@@ -165,7 +204,8 @@ export const useAppStore = create<AppState>()(
       }),
       onRehydrateStorage: () => () => {
         useAppStore.setState(current => ({
-          ...ensureUserDemoData(current, current.currentUserId),
+          ...current,
+          schemaVersion: current.schemaVersion ?? 2,
           hydrated: true,
         }));
       },

@@ -1,12 +1,14 @@
 import React, {useMemo, useState} from 'react';
-import {Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
+import {Alert, Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
+import {Button, Card, List, Modal, Portal, Text, TextInput} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
 import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
+import {exportMyData, importMyData} from '@/api/data';
+import {AppDataExportPayload} from '@/services/localAppService';
 
 const DEFAULT_AVATAR = require('../../assets/images/avatar-default.jpeg');
 const THEME_OPTIONS: ThemePreference[] = ['SYSTEM', 'LIGHT', 'DARK'];
@@ -49,6 +51,10 @@ export default function MineScreen(): React.JSX.Element {
   const themePreference = useThemeStore(state => state.preference);
   const setThemePreference = useThemeStore(state => state.setPreference);
   const [themeDialogVisible, setThemeDialogVisible] = useState(false);
+  const [dataDialogVisible, setDataDialogVisible] = useState(false);
+  const [dataDialogMode, setDataDialogMode] = useState<'EXPORT' | 'IMPORT'>('EXPORT');
+  const [exportPayloadText, setExportPayloadText] = useState('');
+  const [importPayloadText, setImportPayloadText] = useState('');
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -60,6 +66,35 @@ export default function MineScreen(): React.JSX.Element {
     : 'rgba(24, 34, 33, 0.38)';
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
+
+  async function handleOpenExportDialog(): Promise<void> {
+    try {
+      const response = await exportMyData();
+      setDataDialogMode('EXPORT');
+      setExportPayloadText(JSON.stringify(response.data, null, 2));
+      setDataDialogVisible(true);
+    } catch (error: any) {
+      Alert.alert('导出失败', error?.message ?? '请稍后重试');
+    }
+  }
+
+  function handleOpenImportDialog(): void {
+    setDataDialogMode('IMPORT');
+    setImportPayloadText('');
+    setDataDialogVisible(true);
+  }
+
+  async function handleConfirmImport(): Promise<void> {
+    try {
+      const parsedPayload = JSON.parse(importPayloadText) as AppDataExportPayload;
+      await importMyData(parsedPayload);
+      setDataDialogVisible(false);
+      setImportPayloadText('');
+      Alert.alert('导入成功', '已覆盖当前账户数据。');
+    } catch (error: any) {
+      Alert.alert('导入失败', error?.message ?? '请检查 JSON 内容格式');
+    }
+  }
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -190,6 +225,37 @@ export default function MineScreen(): React.JSX.Element {
               </View>
             )}
             onPress={() => navigation.navigate('CategoryManage')}
+          />
+          <List.Item
+            title="数据备份"
+            description="导出 JSON 或导入恢复"
+            left={() => (
+              <View
+                style={[
+                  styles.menuIcon,
+                  {
+                    borderColor: isDark ? '#47616A' : '#CFE0E4',
+                    backgroundColor: isDark ? '#22363D' : '#EEF6F8',
+                  },
+                ]}>
+                <Text style={{color: colors.primary, fontWeight: '700'}}>↕</Text>
+              </View>
+            )}
+            onPress={() =>
+              Alert.alert('数据备份', '选择需要的操作', [
+                {text: '取消', style: 'cancel'},
+                {
+                  text: '导入',
+                  onPress: handleOpenImportDialog,
+                },
+                {
+                  text: '导出',
+                  onPress: () => {
+                    void handleOpenExportDialog();
+                  },
+                },
+              ])
+            }
           />
           <List.Item
             title="关于"
@@ -335,6 +401,47 @@ export default function MineScreen(): React.JSX.Element {
             </View>
           </View>
         </Modal>
+        <Modal
+          visible={dataDialogVisible}
+          onDismiss={() => setDataDialogVisible(false)}
+          contentContainerStyle={styles.themeModalContainer}
+          style={{backgroundColor: modalMaskColor}}>
+          <View
+            style={[
+              styles.themeModalCard,
+              {
+                backgroundColor: modalCardColor,
+                borderColor: modalCardBorder,
+              },
+            ]}>
+            <Text variant="titleLarge" style={{fontWeight: '800', color: colors.text}}>
+              {dataDialogMode === 'EXPORT' ? '导出数据' : '导入数据'}
+            </Text>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              {dataDialogMode === 'EXPORT'
+                ? '可复制下方 JSON 作为离线备份。'
+                : '粘贴导出 JSON，确认后会覆盖当前账户数据。'}
+            </Text>
+            <TextInput
+              mode="outlined"
+              multiline
+              value={dataDialogMode === 'EXPORT' ? exportPayloadText : importPayloadText}
+              onChangeText={setImportPayloadText}
+              editable={dataDialogMode === 'IMPORT'}
+              placeholder={dataDialogMode === 'IMPORT' ? '请粘贴导出的 JSON 数据' : undefined}
+              outlineStyle={{borderRadius: 16}}
+              style={styles.backupInput}
+            />
+            <View style={styles.dataActions}>
+              {dataDialogMode === 'IMPORT' ? (
+                <Button mode="contained" onPress={() => void handleConfirmImport()}>
+                  确认导入
+                </Button>
+              ) : null}
+              <Button onPress={() => setDataDialogVisible(false)}>关闭</Button>
+            </View>
+          </View>
+        </Modal>
       </Portal>
     </SafeAreaView>
   );
@@ -447,5 +554,15 @@ const styles = StyleSheet.create({
   },
   themeActions: {
     alignItems: 'flex-end',
+  },
+  backupInput: {
+    minHeight: 180,
+    maxHeight: 300,
+  },
+  dataActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
   },
 });

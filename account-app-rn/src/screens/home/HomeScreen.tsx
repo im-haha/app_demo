@@ -11,7 +11,8 @@ import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
-import {buildStatsDisplayBillMappings} from '@/utils/statsDisplayData';
+import {useRecentBills} from '@/store/selectors/billSelectors';
+import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -23,102 +24,11 @@ export default function HomeScreen(): React.JSX.Element {
   const listBottomPadding = fabBottom + 88;
   const month = dayjs().format('YYYY-MM');
   const users = useAppStore(state => state.users);
-  const storeBills = useAppStore(state => state.bills);
-  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAppStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
-  const sourceUserBills = useMemo(
-    () =>
-      storeBills
-        .filter(bill => bill.userId === currentUserId && !bill.deleted)
-        .sort(
-          (left, right) =>
-            dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
-        ),
-    [storeBills, currentUserId],
-  );
-  const statsDisplayBills = useMemo(
-    () => buildStatsDisplayBillMappings(sourceUserBills, categories, currentUserId, 30),
-    [sourceUserBills, categories, currentUserId],
-  );
-  const userBills = useMemo(
-    () => statsDisplayBills.map(item => item.displayBill),
-    [statsDisplayBills],
-  );
-  const overview = useMemo(() => {
-    const today = dayjs().format('YYYY-MM-DD');
-    const todayIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM-DD') === today,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const todayExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM-DD') === today,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-
-    return {
-      todayIncome,
-      todayExpense,
-      monthIncome,
-      monthExpense,
-      monthBalance: monthIncome - monthExpense,
-    };
-  }, [userBills, month]);
-  const budget = useMemo(() => {
-    if (!currentUserId) {
-      return {
-        month,
-        budgetAmount: 0,
-        spentAmount: 0,
-        remainingAmount: 0,
-        usageRate: 0,
-      };
-    }
-
-    const budgetSetting = budgets.find(
-      item => item.userId === currentUserId && item.month === month,
-    );
-    const spentAmount = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const budgetAmount = budgetSetting?.amount ?? 0;
-    const remainingAmount = budgetAmount - spentAmount;
-    const usageRate =
-      budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
-
-    return {
-      month,
-      budgetAmount,
-      spentAmount,
-      remainingAmount,
-      usageRate,
-    };
-  }, [month, budgets, userBills, currentUserId]);
-  const bills = useMemo(() => statsDisplayBills.slice(0, 5), [statsDisplayBills]);
+  const overview = useMonthlyOverview(month);
+  const budget = useBudgetSummary(month);
+  const bills = useRecentBills(5);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -312,18 +222,15 @@ export default function HomeScreen(): React.JSX.Element {
             ) : (
               bills.map(item => (
                 <BillCard
-                  key={item.displayBill.id}
-                  bill={item.displayBill}
+                  key={item.id}
+                  bill={item}
                   category={categories.find(
-                    category => category.id === item.displayBill.categoryId,
+                    category => category.id === item.categoryId,
                   )}
-                  onPress={
-                    item.sourceBillId
-                      ? () =>
-                          navigation.navigate('BillDetail', {
-                            billId: item.sourceBillId,
-                          })
-                      : undefined
+                  onPress={() =>
+                    navigation.navigate('BillDetail', {
+                      billId: item.id,
+                    })
                   }
                 />
               ))

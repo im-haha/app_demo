@@ -32,6 +32,12 @@ export interface BillRecord {
   deleted: boolean;
   createdAt: string;
   updatedAt: string;
+  accountId?: number | null;
+  merchant?: string;
+  tagNames?: string[];
+  isTransfer?: boolean;
+  transferTargetAccountId?: number | null;
+  source?: 'MANUAL' | 'IMPORT' | 'RECURRING';
 }
 
 export interface BillInput {
@@ -41,6 +47,12 @@ export interface BillInput {
   accountType: AccountType;
   billTime: string;
   remark: string;
+  accountId?: number | null;
+  merchant?: string;
+  tagNames?: string[];
+  isTransfer?: boolean;
+  transferTargetAccountId?: number | null;
+  source?: 'MANUAL' | 'IMPORT' | 'RECURRING';
 }
 
 export interface BillFilters {
@@ -49,6 +61,26 @@ export interface BillFilters {
   startDate?: string;
   endDate?: string;
   keyword?: string;
+  accountType?: AccountType | 'ALL';
+  minAmount?: number;
+  maxAmount?: number;
+  month?: string;
+  merchantKeyword?: string;
+}
+
+export interface BillAdvancedFilters extends BillFilters {
+  accountType?: AccountType | 'ALL';
+  minAmount?: number;
+  maxAmount?: number;
+  month?: string;
+}
+
+export interface BillListSection {
+  title: string;
+  date: string;
+  data: BillRecord[];
+  dayExpense: number;
+  dayIncome: number;
 }
 
 export interface BudgetSetting {

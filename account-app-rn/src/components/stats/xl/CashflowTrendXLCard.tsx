@@ -30,7 +30,8 @@ type StatsType = 'INCOME' | 'EXPENSE';
 interface Props {
   data: TrendPoint[];
   type: StatsType;
-  rangeDays: 7 | 30;
+  rangeDays: number;
+  rangeLabel?: string;
   previousTotal?: number;
 }
 
@@ -55,6 +56,7 @@ export default function CashflowTrendXLCard({
   data,
   type,
   rangeDays,
+  rangeLabel,
   previousTotal,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
@@ -170,7 +172,7 @@ export default function CashflowTrendXLCard({
   const hasRealData = chartData.some(item => item.rawDailyAmount > 0);
   const leadingZeroDays = useMemo(() => countLeadingZeroDays(data), [data]);
   const shouldEnableEffectiveWindow =
-    hasRealData && rangeDays === 30 && leadingZeroDays >= 8;
+    hasRealData && rangeDays >= 30 && leadingZeroDays >= 8;
   const [zoomMode, setZoomMode] = useState<'full' | 'effective'>('full');
 
   useEffect(() => {
@@ -287,12 +289,12 @@ export default function CashflowTrendXLCard({
       return '';
     }
     if (previousTotal <= 0) {
-      return `前${rangeDays}天暂无可比数据`;
+      return `上一周期暂无可比数据`;
     }
     const deltaRate = (totalAmount - previousTotal) / previousTotal;
     const symbol = deltaRate >= 0 ? '+' : '-';
-    return `较前${rangeDays}天 ${symbol}${Math.abs(deltaRate * 100).toFixed(1)}%`;
-  }, [previousTotal, rangeDays, totalAmount]);
+    return `较上一周期 ${symbol}${Math.abs(deltaRate * 100).toFixed(1)}%`;
+  }, [previousTotal, totalAmount]);
 
   const comparisonColor = useMemo(() => {
     if (previousTotal === undefined || previousTotal <= 0) {
@@ -326,11 +328,11 @@ export default function CashflowTrendXLCard({
     setChartWidth(event.nativeEvent.layout.width);
   }
 
-  const cardTitle = `${rangeDays} 天累计${summaryNoun}走势`;
+  const cardTitle = `${rangeLabel ?? `近${rangeDays}天`}累计${summaryNoun}走势`;
   const cardSubtitle = `累计${summaryNoun}与每日${summaryNoun}分布`;
-  const emptyText = `最近${rangeDays}天暂无${summaryNoun}记录`;
+  const emptyText = `${rangeLabel ?? `近${rangeDays}天`}暂无${summaryNoun}记录`;
   const subChartHeight = SUB_CHART_HEIGHT;
-  const barWidth = rangeDays === 30 ? 6 : 9;
+  const barWidth = rangeDays >= 30 ? 6 : 9;
 
   return (
     <Card

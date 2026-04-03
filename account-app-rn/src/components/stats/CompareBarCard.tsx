@@ -7,7 +7,8 @@ import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {formatCurrency, formatPercent} from '@/components/stats/chart/statsChartFormat';
 
 interface Props {
-  rangeDays: 7 | 30;
+  rangeDays: number;
+  rangeLabel?: string;
   incomeTotal: number;
   expenseTotal: number;
 }
@@ -34,6 +35,7 @@ const PIE_CIRCUMFERENCE = 2 * Math.PI * PIE_RADIUS;
 
 export default function CompareBarCard({
   rangeDays,
+  rangeLabel,
   incomeTotal,
   expenseTotal,
 }: Props): React.JSX.Element {
@@ -114,7 +116,7 @@ export default function CompareBarCard({
             收支对比
           </Text>
           <Text variant="bodySmall" style={{color: colors.muted}}>
-            近{rangeDays}天
+            {rangeLabel ?? `近${rangeDays}天`}
           </Text>
         </View>
         <View style={styles.pieRow}>

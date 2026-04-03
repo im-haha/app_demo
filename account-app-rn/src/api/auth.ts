@@ -2,6 +2,7 @@ import {ApiResponse} from '@/types/api';
 import {LoginPayload, RegisterPayload, UpdateProfilePayload, UserProfile} from '@/types/user';
 import {useAppStore} from '@/store/appStore';
 
+// Local-auth mock: keep API signatures stable for future server-side migration.
 export async function register(payload: RegisterPayload): Promise<ApiResponse<UserProfile>> {
   const data = await useAppStore.getState().register(payload);
   return {code: 200, message: 'success', data};

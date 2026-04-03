@@ -1,57 +1,48 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import dayjs from 'dayjs';
-import {Card, ProgressBar, Text} from 'react-native-paper';
+import {Button, Card, ProgressBar, Text} from 'react-native-paper';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
-import {saveBudget} from '@/api/budget';
+import {copyLastMonthBudget, saveBudget} from '@/api/budget';
 import {useAppStore} from '@/store/appStore';
 import {useThemeColors} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 
 export default function BudgetScreen(): React.JSX.Element {
   const colors = useThemeColors();
-  const month = dayjs().format('YYYY-MM');
-  const budgets = useAppStore(state => state.budgets);
+  const currentMonth = dayjs().format('YYYY-MM');
+  const [month, setMonth] = useState(currentMonth);
+  const [amount, setAmount] = useState('');
   const bills = useAppStore(state => state.bills);
+  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAppStore(state => state.currentUserId);
+  const getBudgetByMonth = useAppStore(state => state.getBudgetByMonth);
+  const getBudgetHistoryStore = useAppStore(state => state.getBudgetHistory);
   const summary = useMemo(
-    () => {
-      if (!currentUserId) {
-        return {
-          month,
-          budgetAmount: 0,
-          spentAmount: 0,
-          remainingAmount: 0,
-          usageRate: 0,
-        };
-      }
-
-      const budget = budgets.find(item => item.userId === currentUserId && item.month === month);
-      const spentAmount = bills
-        .filter(
-          bill =>
-            bill.userId === currentUserId &&
-            !bill.deleted &&
-            bill.type === 'EXPENSE' &&
-            dayjs(bill.billTime).format('YYYY-MM') === month,
-        )
-        .reduce((sum, bill) => sum + bill.amount, 0);
-      const budgetAmount = budget?.amount ?? 0;
-      const remainingAmount = budgetAmount - spentAmount;
-      const usageRate = budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
-
-      return {
-        month,
-        budgetAmount,
-        spentAmount,
-        remainingAmount,
-        usageRate,
-      };
-    },
-    [month, budgets, bills, currentUserId],
+    () => getBudgetByMonth(month),
+    [getBudgetByMonth, month, bills, budgets, currentUserId],
   );
-  const [amount, setAmount] = useState(summary.budgetAmount > 0 ? String(summary.budgetAmount) : '');
+  const history = useMemo(
+    () => getBudgetHistoryStore(12),
+    [getBudgetHistoryStore, bills, budgets, currentUserId],
+  );
+  const canMoveNextMonth = dayjs(month).isBefore(dayjs(currentMonth), 'month');
+
+  useEffect(() => {
+    setAmount(summary.budgetAmount > 0 ? String(summary.budgetAmount) : '');
+  }, [summary.budgetAmount, month]);
+
+  function moveMonth(direction: -1 | 1): void {
+    const nextMonth = dayjs(month).add(direction, 'month').format('YYYY-MM');
+    if (direction > 0 && !dayjs(nextMonth).isBefore(dayjs(currentMonth).add(1, 'month'), 'month')) {
+      return;
+    }
+    if (direction > 0 && dayjs(nextMonth).isAfter(dayjs(currentMonth), 'month')) {
+      return;
+    }
+    setMonth(nextMonth);
+  }
 
   async function handleSave() {
     const parsed = Number(amount);
@@ -60,25 +51,60 @@ export default function BudgetScreen(): React.JSX.Element {
       return;
     }
 
-    await saveBudget(month, parsed);
-    Alert.alert('已保存', '本月预算已更新');
+    try {
+      await saveBudget(month, parsed);
+      Alert.alert('已保存', `${month} 预算已更新`);
+    } catch (error: any) {
+      Alert.alert('保存失败', error?.message ?? '请稍后重试');
+    }
+  }
+
+  async function handleCopyLastMonthBudget(): Promise<void> {
+    try {
+      await copyLastMonthBudget(month);
+      Alert.alert('已沿用', `${month} 已沿用上月预算`);
+    } catch (error: any) {
+      Alert.alert('无法沿用', error?.message ?? '请先设置上月预算');
+    }
   }
 
   return (
     <ScrollView contentContainerStyle={{padding: 20, gap: 16}}>
       <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
         <Card.Content style={{gap: 16}}>
-          <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-            {month} 月预算
-          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+            <Button mode="text" onPress={() => moveMonth(-1)}>
+              上月
+            </Button>
+            <Text variant="headlineSmall" style={{fontWeight: '800'}}>
+              {month} 月预算
+            </Text>
+            <Button mode="text" disabled={!canMoveNextMonth} onPress={() => moveMonth(1)}>
+              下月
+            </Button>
+          </View>
           <AppInput
             label="预算金额"
             value={amount}
             onChangeText={setAmount}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
             placeholder="例如 3000"
           />
-          <AppButton onPress={handleSave}>保存预算</AppButton>
+          <View style={{flexDirection: 'row', gap: 10}}>
+            <View style={{flex: 1}}>
+              <AppButton onPress={handleSave}>保存预算</AppButton>
+            </View>
+            <View style={{flex: 1}}>
+              <Button mode="contained-tonal" onPress={() => void handleCopyLastMonthBudget()}>
+                沿用上月预算
+              </Button>
+            </View>
+          </View>
         </Card.Content>
       </Card>
 
@@ -92,6 +118,34 @@ export default function BudgetScreen(): React.JSX.Element {
             <Text>剩余预算：{formatCurrency(summary.remainingAmount)}</Text>
             <Text>使用比例：{(summary.usageRate * 100).toFixed(0)}%</Text>
           </View>
+        </Card.Content>
+      </Card>
+
+      <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
+        <Card.Content style={{gap: 10}}>
+          <Text variant="titleMedium">预算历史（最近 12 个月）</Text>
+          {history.map(item => (
+            <View
+              key={item.month}
+              style={{
+                paddingVertical: 8,
+                borderBottomWidth: 1,
+                borderBottomColor: 'rgba(120,130,140,0.16)',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+              <Text>{item.month}</Text>
+              <View style={{alignItems: 'flex-end'}}>
+                <Text style={{fontWeight: '700'}}>
+                  预算 {formatCurrency(item.budgetAmount)}
+                </Text>
+                <Text style={{color: colors.muted}}>
+                  支出 {formatCurrency(item.spentAmount)}
+                </Text>
+              </View>
+            </View>
+          ))}
         </Card.Content>
       </Card>
     </ScrollView>

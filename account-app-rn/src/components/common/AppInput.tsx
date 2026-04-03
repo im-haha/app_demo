@@ -11,7 +11,7 @@ interface Props {
   onChangeText: (value: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'numeric';
+  keyboardType?: RNTextInputProps['keyboardType'];
   multiline?: boolean;
   autoComplete?: RNTextInputProps['autoComplete'];
   textContentType?: RNTextInputProps['textContentType'];

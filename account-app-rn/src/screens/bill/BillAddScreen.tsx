@@ -18,7 +18,16 @@ export default function BillAddScreen({navigation}: Props): React.JSX.Element {
       onSubmit={async payload => {
         try {
           await createBill(payload);
-          navigation.goBack();
+          Alert.alert('保存成功', '账单已保存', [
+            {
+              text: '继续记一笔',
+              onPress: () => navigation.replace('BillAdd'),
+            },
+            {
+              text: '返回列表',
+              onPress: () => navigation.goBack(),
+            },
+          ]);
         } catch (error: any) {
           Alert.alert('保存失败', error.message ?? '请稍后重试');
         }

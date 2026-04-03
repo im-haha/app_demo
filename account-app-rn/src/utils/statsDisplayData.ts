@@ -1,16 +1,11 @@
 import dayjs from 'dayjs';
-import {BillRecord, BillType, Category, TrendPoint} from '@/types/bill';
+import {BillRecord, BillType, TrendPoint} from '@/types/bill';
 
 const MIN_TREND_AMOUNT = 1;
 const DEFAULT_SYNTHETIC_BASE = {
   INCOME: 260,
   EXPENSE: 120,
 } as const;
-
-export interface StatsDisplayBillMapping {
-  displayBill: BillRecord;
-  sourceBillId: number | null;
-}
 
 function findNearestPositiveIndex(
   amounts: number[],
@@ -96,17 +91,39 @@ function normalizeTrendPoints(
 
 export function buildStatsTrendPoints(
   bills: BillRecord[],
-  rangeDays: 7 | 30,
+  rangeDays: number,
   type: BillType,
 ): TrendPoint[] {
-  const end = dayjs().startOf('day');
-  const start = end.subtract(rangeDays, 'day');
+  const safeRangeDays = Math.max(1, Math.floor(rangeDays));
+  const end = dayjs();
+  const start = dayjs().startOf('day').subtract(safeRangeDays - 1, 'day');
+  return buildStatsTrendPointsByRange(bills, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'), type);
+}
+
+export function buildStatsTrendPointsByRange(
+  bills: BillRecord[],
+  startDate: string,
+  endDate: string,
+  type: BillType,
+): TrendPoint[] {
+  const rawStart = dayjs(startDate);
+  const rawEnd = dayjs(endDate);
+  const normalizedStart = rawStart.startOf('day');
+  const normalizedEnd = rawEnd.endOf('day');
+  const start = normalizedStart.isAfter(normalizedEnd)
+    ? normalizedEnd.startOf('day')
+    : normalizedStart;
+  const end = normalizedStart.isAfter(normalizedEnd)
+    ? normalizedStart.endOf('day')
+    : normalizedEnd;
+  const rangeDays = Math.max(1, end.startOf('day').diff(start.startOf('day'), 'day') + 1);
   const startThreshold = start.subtract(1, 'millisecond');
+  const endThreshold = end.add(1, 'millisecond');
   const rangedBills = bills.filter(
     bill =>
       bill.type === type &&
       dayjs(bill.billTime).isAfter(startThreshold) &&
-      dayjs(bill.billTime).isBefore(end),
+      dayjs(bill.billTime).isBefore(endThreshold),
   );
 
   const rawTrendStats = Array.from({length: rangeDays}).map((_, index) => {
@@ -124,165 +141,4 @@ export function buildStatsTrendPoints(
   });
 
   return normalizeTrendPoints(rawTrendStats, type);
-}
-
-function findCategoryIdByType(
-  categories: Category[],
-  currentUserId: number,
-  type: BillType,
-): number {
-  const userCategory = categories.find(
-    category => category.userId === currentUserId && category.type === type,
-  );
-  if (userCategory) {
-    return userCategory.id;
-  }
-
-  const defaultCategory = categories.find(
-    category => category.userId === null && category.type === type,
-  );
-  if (defaultCategory) {
-    return defaultCategory.id;
-  }
-
-  const fallback = categories.find(category => category.type === type);
-  return fallback?.id ?? 1;
-}
-
-export function buildStatsDisplayBills(
-  sourceBills: BillRecord[],
-  categories: Category[],
-  currentUserId: number | null,
-  rangeDays: 7 | 30 = 30,
-): BillRecord[] {
-  return buildStatsDisplayBillMappings(
-    sourceBills,
-    categories,
-    currentUserId,
-    rangeDays,
-  ).map(item => item.displayBill);
-}
-
-function buildSourceBillPicker(
-  sourceBills: BillRecord[],
-  currentUserId: number,
-): (date: string, type: BillType) => BillRecord | null {
-  const billsByDateType = new Map<string, BillRecord[]>();
-  const billsByType: Record<BillType, BillRecord[]> = {
-    INCOME: [],
-    EXPENSE: [],
-  };
-  const dateTypeCursor = new Map<string, number>();
-  const typeCursor: Record<BillType, number> = {
-    INCOME: 0,
-    EXPENSE: 0,
-  };
-
-  sourceBills
-    .filter(bill => bill.userId === currentUserId && !bill.deleted)
-    .forEach(bill => {
-      const dateKey = dayjs(bill.billTime).format('YYYY-MM-DD');
-      const key = `${dateKey}|${bill.type}`;
-      const keyList = billsByDateType.get(key);
-      if (keyList) {
-        keyList.push(bill);
-      } else {
-        billsByDateType.set(key, [bill]);
-      }
-      billsByType[bill.type].push(bill);
-    });
-
-  return (date: string, type: BillType): BillRecord | null => {
-    const key = `${date}|${type}`;
-    const sameDayTypeBills = billsByDateType.get(key);
-    if (sameDayTypeBills && sameDayTypeBills.length > 0) {
-      const currentCursor = dateTypeCursor.get(key) ?? 0;
-      const bill = sameDayTypeBills[currentCursor % sameDayTypeBills.length];
-      dateTypeCursor.set(key, currentCursor + 1);
-      return bill;
-    }
-
-    const fallbackBills = billsByType[type];
-    if (fallbackBills.length <= 0) {
-      return null;
-    }
-    const currentCursor = typeCursor[type];
-    const bill = fallbackBills[currentCursor % fallbackBills.length];
-    typeCursor[type] = currentCursor + 1;
-    return bill;
-  };
-}
-
-export function buildStatsDisplayBillMappings(
-  sourceBills: BillRecord[],
-  categories: Category[],
-  currentUserId: number | null,
-  rangeDays: 7 | 30 = 30,
-): StatsDisplayBillMapping[] {
-  if (!currentUserId) {
-    return [];
-  }
-
-  const incomeTrend = buildStatsTrendPoints(sourceBills, rangeDays, 'INCOME');
-  const expenseTrend = buildStatsTrendPoints(sourceBills, rangeDays, 'EXPENSE');
-  const incomeCategoryId = findCategoryIdByType(categories, currentUserId, 'INCOME');
-  const expenseCategoryId = findCategoryIdByType(categories, currentUserId, 'EXPENSE');
-  const now = dayjs().format('YYYY-MM-DD HH:mm:ss');
-  const pickSourceBill = buildSourceBillPicker(sourceBills, currentUserId);
-  let nextSyntheticId = -1;
-  const mappings: StatsDisplayBillMapping[] = [];
-
-  incomeTrend.forEach(point => {
-    const sourceBill = pickSourceBill(point.date, 'INCOME');
-    mappings.push({
-      displayBill: {
-        id: nextSyntheticId,
-        userId: currentUserId,
-        type: 'INCOME',
-        amount: point.amount,
-        categoryId: sourceBill?.categoryId ?? incomeCategoryId,
-        accountType: sourceBill?.accountType ?? 'OTHER',
-        billTime: `${point.date} ${sourceBill ? dayjs(sourceBill.billTime).format('HH:mm:ss') : '12:10:00'}`,
-        remark:
-          sourceBill?.remark && sourceBill.remark.trim().length > 0
-            ? sourceBill.remark
-            : '按统计图表生成',
-        deleted: false,
-        createdAt: sourceBill?.createdAt ?? now,
-        updatedAt: now,
-      },
-      sourceBillId: sourceBill?.id ?? null,
-    });
-    nextSyntheticId -= 1;
-  });
-
-  expenseTrend.forEach(point => {
-    const sourceBill = pickSourceBill(point.date, 'EXPENSE');
-    mappings.push({
-      displayBill: {
-        id: nextSyntheticId,
-        userId: currentUserId,
-        type: 'EXPENSE',
-        amount: point.amount,
-        categoryId: sourceBill?.categoryId ?? expenseCategoryId,
-        accountType: sourceBill?.accountType ?? 'OTHER',
-        billTime: `${point.date} ${sourceBill ? dayjs(sourceBill.billTime).format('HH:mm:ss') : '12:20:00'}`,
-        remark:
-          sourceBill?.remark && sourceBill.remark.trim().length > 0
-            ? sourceBill.remark
-            : '按统计图表生成',
-        deleted: false,
-        createdAt: sourceBill?.createdAt ?? now,
-        updatedAt: now,
-      },
-      sourceBillId: sourceBill?.id ?? null,
-    });
-    nextSyntheticId -= 1;
-  });
-
-  return mappings.sort(
-    (left, right) =>
-      dayjs(right.displayBill.billTime).valueOf() -
-      dayjs(left.displayBill.billTime).valueOf(),
-  );
 }

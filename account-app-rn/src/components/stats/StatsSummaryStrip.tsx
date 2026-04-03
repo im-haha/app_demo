@@ -10,7 +10,8 @@ type StatsType = 'INCOME' | 'EXPENSE';
 
 interface Props {
   type: StatsType;
-  rangeDays: 7 | 30;
+  rangeDays: number;
+  rangeLabel?: string;
   totalAmount: number;
   previousTotal: number;
 }
@@ -18,6 +19,7 @@ interface Props {
 export default function StatsSummaryStrip({
   type,
   rangeDays,
+  rangeLabel,
   totalAmount,
   previousTotal,
 }: Props): React.JSX.Element {
@@ -38,13 +40,14 @@ export default function StatsSummaryStrip({
 
   const deltaValue =
     previousTotal <= 0 ? '暂无可比' : formatDeltaPercent(totalAmount, previousTotal);
+  const helperLabel = rangeLabel ?? `近${rangeDays}天`;
 
   return (
     <View style={styles.row}>
       <StatsMetricPill
         label={summaryLabel}
         value={formatCurrency(totalAmount)}
-        helper={`近${rangeDays}天`}
+        helper={helperLabel}
         tone={summaryTone}
       />
       <StatsMetricPill

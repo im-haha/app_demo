@@ -23,8 +23,12 @@ import {
   exportAppData,
   getBudgetSummary,
   getCategoryStats,
+  getCategoryStatsByRange,
+  getIncomeExpenseTotalsByRange,
   getOverviewStats,
+  getPreviousPeriodTotalByRange,
   getTrendData,
+  getTrendDataByRange,
   importAppData,
   listBudgetHistory,
   listBills,
@@ -33,6 +37,7 @@ import {
   loginUser,
   AppDataExportPayload,
   PersistedAppData,
+  RangeIncomeExpenseTotals,
   replaceCategoryAndDelete,
   registerUser,
   saveBill,
@@ -70,6 +75,29 @@ interface AppState extends PersistedAppData {
   getOverview: () => OverviewStats;
   getCategoryBreakdown: (month: string, type: BillType) => CategoryStat[];
   getTrend: (rangeDays: number, type: BillType) => TrendPoint[];
+  getTrendByRange: (
+    startDate: string,
+    endDate: string,
+    type: BillType,
+    filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+  ) => TrendPoint[];
+  getCategoryBreakdownByRange: (
+    startDate: string,
+    endDate: string,
+    type: BillType,
+    filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+  ) => CategoryStat[];
+  getPreviousPeriodTotalByRange: (
+    startDate: string,
+    endDate: string,
+    type: BillType,
+    filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+  ) => number;
+  getIncomeExpenseTotalsByRange: (
+    startDate: string,
+    endDate: string,
+    filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+  ) => RangeIncomeExpenseTotals;
   exportCurrentUserData: () => AppDataExportPayload;
   importCurrentUserData: (payload: AppDataExportPayload) => void;
 }
@@ -182,6 +210,49 @@ export const useAppStore = create<AppState>()(
       getTrend: (rangeDays, type) => {
         const state = get();
         return getTrendData(state, state.currentUserId, rangeDays, type);
+      },
+      getTrendByRange: (startDate, endDate, type, filters) => {
+        const state = get();
+        return getTrendDataByRange(
+          state,
+          state.currentUserId,
+          startDate,
+          endDate,
+          type,
+          filters,
+        );
+      },
+      getCategoryBreakdownByRange: (startDate, endDate, type, filters) => {
+        const state = get();
+        return getCategoryStatsByRange(
+          state,
+          state.currentUserId,
+          startDate,
+          endDate,
+          type,
+          filters,
+        );
+      },
+      getPreviousPeriodTotalByRange: (startDate, endDate, type, filters) => {
+        const state = get();
+        return getPreviousPeriodTotalByRange(
+          state,
+          state.currentUserId,
+          startDate,
+          endDate,
+          type,
+          filters,
+        );
+      },
+      getIncomeExpenseTotalsByRange: (startDate, endDate, filters) => {
+        const state = get();
+        return getIncomeExpenseTotalsByRange(
+          state,
+          state.currentUserId,
+          startDate,
+          endDate,
+          filters,
+        );
       },
       exportCurrentUserData: () => {
         const state = get();

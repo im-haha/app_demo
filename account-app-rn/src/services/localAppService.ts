@@ -15,6 +15,8 @@ import {
 } from '@/types/bill';
 import {RegisterPayload, UserProfile} from '@/types/user';
 import {defaultCategories} from '@/data/defaultCategories';
+import {buildStatsTrendPointsByRange} from '@/utils/statsDisplayData';
+import {normalizeDateRange} from '@/utils/timeRange';
 
 export interface PersistedAppData {
   schemaVersion: number;
@@ -753,10 +755,86 @@ export function getCategoryStats(
   month: string,
   type: BillType,
 ): CategoryStat[] {
+  const monthStart = dayjs(month).startOf('month').format('YYYY-MM-DD');
+  const monthEnd = dayjs(month).endOf('month').format('YYYY-MM-DD');
+  return getCategoryStatsByRange(data, currentUserId, monthStart, monthEnd, type);
+}
+
+function buildRangeListFilters(
+  startDate: string,
+  endDate: string,
+  filters?: Omit<BillFilters, 'startDate' | 'endDate' | 'month'>,
+): BillFilters {
+  return {
+    ...filters,
+    startDate,
+    endDate,
+  };
+}
+
+export interface RangeIncomeExpenseTotals {
+  incomeTotal: number;
+  expenseTotal: number;
+}
+
+export function getBillsByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  filters?: Omit<BillFilters, 'startDate' | 'endDate' | 'month'>,
+): BillRecord[] {
   const userId = ensureCurrentUserId(currentUserId);
-  const bills = listBills(data, userId, {type}).filter(
-    bill => dayjs(bill.billTime).format('YYYY-MM') === month,
+  const normalizedRange = normalizeDateRange(startDate, endDate);
+
+  return listBills(
+    data,
+    userId,
+    buildRangeListFilters(
+      normalizedRange.startDate,
+      normalizedRange.endDate,
+      filters,
+    ),
   );
+}
+
+export function getTrendDataByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  type: BillType,
+  filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+): TrendPoint[] {
+  const normalizedRange = normalizeDateRange(startDate, endDate);
+  const bills = getBillsByRange(
+    data,
+    currentUserId,
+    normalizedRange.startDate,
+    normalizedRange.endDate,
+    filters,
+  );
+
+  return buildStatsTrendPointsByRange(
+    bills,
+    normalizedRange.startDate,
+    normalizedRange.endDate,
+    type,
+  );
+}
+
+export function getCategoryStatsByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  type: BillType,
+  filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+): CategoryStat[] {
+  const bills = getBillsByRange(data, currentUserId, startDate, endDate, {
+    ...filters,
+    type,
+  });
   const total = bills.reduce((sum, bill) => sum + bill.amount, 0);
   const categoryMap = new Map<number, number>();
 
@@ -779,32 +857,68 @@ export function getCategoryStats(
     .sort((left, right) => right.amount - left.amount);
 }
 
+export function getPreviousPeriodTotalByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  type: BillType,
+  filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+): number {
+  const normalizedRange = normalizeDateRange(startDate, endDate);
+  const currentStart = dayjs(normalizedRange.startDate).startOf('day');
+  const previousEnd = currentStart.subtract(1, 'day').format('YYYY-MM-DD');
+  const previousStart = dayjs(previousEnd)
+    .subtract(normalizedRange.days - 1, 'day')
+    .format('YYYY-MM-DD');
+  const previousBills = getBillsByRange(
+    data,
+    currentUserId,
+    previousStart,
+    previousEnd,
+    {
+      ...filters,
+      type,
+    },
+  );
+
+  return previousBills.reduce((sum, bill) => sum + bill.amount, 0);
+}
+
+export function getIncomeExpenseTotalsByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+): RangeIncomeExpenseTotals {
+  const bills = getBillsByRange(data, currentUserId, startDate, endDate, filters);
+  const incomeTotal = bills
+    .filter(bill => bill.type === 'INCOME')
+    .reduce((sum, bill) => sum + bill.amount, 0);
+  const expenseTotal = bills
+    .filter(bill => bill.type === 'EXPENSE')
+    .reduce((sum, bill) => sum + bill.amount, 0);
+
+  return {
+    incomeTotal,
+    expenseTotal,
+  };
+}
+
 export function getTrendData(
   data: PersistedAppData,
   currentUserId: number | null,
   rangeDays: number,
   type: BillType,
 ): TrendPoint[] {
-  const userId = ensureCurrentUserId(currentUserId);
-  const end = dayjs().endOf('day');
-  const start = dayjs().startOf('day').subtract(rangeDays - 1, 'day');
-  const bills = listBills(data, userId, {type}).filter(bill =>
-    dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')) &&
-    dayjs(bill.billTime).isBefore(end.add(1, 'millisecond')),
-  );
-
-  return Array.from({length: rangeDays}).map((_, index) => {
-    const date = start.add(index, 'day');
-    const amount = bills
-      .filter(bill => dayjs(bill.billTime).format('YYYY-MM-DD') === date.format('YYYY-MM-DD'))
-      .reduce((sum, bill) => sum + bill.amount, 0);
-
-    return {
-      axisLabel: date.format('MM/DD'),
-      amount,
-      date: date.format('YYYY-MM-DD'),
-    };
-  });
+  const safeRangeDays = Math.max(1, Math.floor(rangeDays));
+  const end = dayjs().format('YYYY-MM-DD');
+  const start = dayjs()
+    .startOf('day')
+    .subtract(safeRangeDays - 1, 'day')
+    .format('YYYY-MM-DD');
+  return getTrendDataByRange(data, currentUserId, start, end, type);
 }
 
 export interface AppDataExportPayload {

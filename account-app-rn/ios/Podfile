@@ -37,7 +37,9 @@ target 'AccountAppShell076' do
 
   use_react_native!(
     :path => config[:reactNativePath],
-    :hermes_enabled => false,
+    # Reanimated + JSC can hit JSCRuntime dangling-object abort during bridge teardown.
+    # Switch iOS to Hermes to avoid the JSC destructor assertion crash.
+    :hermes_enabled => true,
     :new_arch_enabled => false,
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."

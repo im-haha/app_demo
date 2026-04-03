@@ -6,9 +6,14 @@ export function formatAxisCurrency(value: number): string {
   if (value === 0) {
     return '¥0';
   }
-  if (Math.abs(value) >= 10000) {
-    const wan = value / 10000;
-    return `¥${wan % 1 === 0 ? wan.toFixed(0) : wan.toFixed(1)}万`;
+  const absValue = Math.abs(value);
+  if (absValue >= 1_000_000) {
+    const million = value / 1_000_000;
+    return `¥${million % 1 === 0 ? million.toFixed(0) : million.toFixed(1)}M`;
+  }
+  if (absValue >= 1_000) {
+    const thousand = value / 1_000;
+    return `¥${thousand % 1 === 0 ? thousand.toFixed(0) : thousand.toFixed(1)}k`;
   }
   return `¥${Math.round(value)}`;
 }

@@ -44,12 +44,12 @@ interface TrendDatum {
   date: string;
 }
 
-const MAIN_CHART_HEIGHT = 184;
-const SUB_CHART_HEIGHT_30 = 86;
-const SUB_CHART_HEIGHT_7 = 72;
-const MAIN_CHART_PADDING = {top: 18, right: 22, bottom: 14, left: 58};
-const SUB_CHART_PADDING = {top: 8, right: 22, bottom: 30, left: 58};
+const MAIN_CHART_HEIGHT = 208;
+const SUB_CHART_HEIGHT = MAIN_CHART_HEIGHT;
+const MAIN_CHART_PADDING = {top: 18, right: 22, bottom: 30, left: 56};
+const SUB_CHART_PADDING = {top: 10, right: 22, bottom: 32, left: 56};
 const TOOLTIP_WIDTH = 196;
+const CHART_PRESS_ACTIVATE_DELAY = 180;
 
 export default function CashflowTrendXLCard({
   data,
@@ -60,16 +60,45 @@ export default function CashflowTrendXLCard({
   const colors = useThemeColors();
   const mode = useResolvedThemeMode();
   const chartTheme = getStatsChartTheme(mode);
-  const axisFont = useMemo(
-    () =>
-      matchFont({
+  const axisFont = useMemo(() => {
+    const candidates = [
+      {
         fontFamily: 'System',
         fontSize: 11,
-        fontStyle: 'normal',
-        fontWeight: '500',
-      }),
-    [],
-  );
+        fontStyle: 'normal' as const,
+        fontWeight: 'normal' as const,
+      },
+      {
+        fontFamily: 'Helvetica',
+        fontSize: 11,
+        fontStyle: 'normal' as const,
+        fontWeight: 'normal' as const,
+      },
+      {
+        fontFamily: 'Arial',
+        fontSize: 11,
+        fontStyle: 'normal' as const,
+        fontWeight: 'normal' as const,
+      },
+    ];
+
+    for (const style of candidates) {
+      const font = matchFont(style);
+      const probeWidth = font
+        .getGlyphWidths(font.getGlyphIDs('04/07 ¥536'))
+        .reduce((sum, width) => sum + width, 0);
+      if (probeWidth > 0) {
+        return font;
+      }
+    }
+
+    return matchFont({
+      fontFamily: 'System',
+      fontSize: 11,
+      fontStyle: 'normal',
+      fontWeight: 'normal',
+    });
+  }, []);
   const lineColor = type === 'EXPENSE' ? chartTheme.expenseLine : chartTheme.incomeLine;
   const fillColor = type === 'EXPENSE' ? chartTheme.expenseFill : chartTheme.incomeFill;
   const summaryColor = type === 'EXPENSE' ? colors.expense : colors.income;
@@ -194,7 +223,10 @@ export default function CashflowTrendXLCard({
     () => computeYAxisMax(subMaxValue, 2),
     [subMaxValue],
   );
-
+  const subYAxisTicks = useMemo(
+    () => buildYAxisTicks(subYAxisMax, 2),
+    [subYAxisMax],
+  );
   const visibleLabelIndexes = useMemo(
     () => buildVisibleLabelIndexes(displayData.length),
     [displayData.length],
@@ -297,7 +329,7 @@ export default function CashflowTrendXLCard({
   const cardTitle = `${rangeDays} 天累计${summaryNoun}走势`;
   const cardSubtitle = `累计${summaryNoun}与每日${summaryNoun}分布`;
   const emptyText = `最近${rangeDays}天暂无${summaryNoun}记录`;
-  const subChartHeight = rangeDays === 30 ? SUB_CHART_HEIGHT_30 : SUB_CHART_HEIGHT_7;
+  const subChartHeight = SUB_CHART_HEIGHT;
   const barWidth = rangeDays === 30 ? 6 : 9;
 
   return (
@@ -348,10 +380,21 @@ export default function CashflowTrendXLCard({
                 chartPressState={chartPressState as any}
                 chartPressConfig={{
                   pan: {
-                    activateAfterLongPress: 0,
+                    activateAfterLongPress: CHART_PRESS_ACTIVATE_DELAY,
                   },
                 }}
                 frame={{lineWidth: 0}}
+                xAxis={{
+                  font: axisFont,
+                  lineWidth: 0,
+                  labelColor: chartTheme.axisText,
+                  labelOffset: 6,
+                  tickValues: axisTickValues,
+                  formatXLabel: label => {
+                    const index = Number(label) - 1;
+                    return displayData[index]?.axisLabel ?? '';
+                  },
+                }}
                 yAxis={[
                   {
                     yKeys: ['cumulativeAmount'],
@@ -360,7 +403,7 @@ export default function CashflowTrendXLCard({
                     lineColor: chartTheme.axisGrid,
                     lineWidth: 1,
                     labelColor: chartTheme.axisText,
-                    labelOffset: 6,
+                    labelOffset: 4,
                     formatYLabel: value => formatAxisCurrency(Number(value)),
                   },
                 ]}>
@@ -450,15 +493,27 @@ export default function CashflowTrendXLCard({
                   chartPressState={chartPressState as any}
                   chartPressConfig={{
                     pan: {
-                      activateAfterLongPress: 0,
+                      activateAfterLongPress: CHART_PRESS_ACTIVATE_DELAY,
                     },
                   }}
                   frame={{lineWidth: 0}}
+                  yAxis={[
+                    {
+                      yKeys: ['dailyAmount'],
+                      font: axisFont,
+                      tickValues: subYAxisTicks,
+                      lineColor: chartTheme.axisGrid,
+                      lineWidth: 1,
+                      labelColor: chartTheme.axisText,
+                      labelOffset: 4,
+                      formatYLabel: value => formatAxisCurrency(Number(value)),
+                    },
+                  ]}
                   xAxis={{
                     font: axisFont,
                     lineWidth: 0,
                     labelColor: chartTheme.axisText,
-                    labelOffset: 8,
+                    labelOffset: 6,
                     tickValues: axisTickValues,
                     formatXLabel: label => {
                       const index = Number(label) - 1;
@@ -635,7 +690,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   emptyContainer: {
-    height: MAIN_CHART_HEIGHT + SUB_CHART_HEIGHT_30,
+    height: MAIN_CHART_HEIGHT + SUB_CHART_HEIGHT,
     borderRadius: 16,
     borderWidth: 1,
     alignItems: 'center',

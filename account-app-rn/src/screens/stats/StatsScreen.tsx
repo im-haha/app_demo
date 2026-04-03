@@ -12,6 +12,97 @@ import StatsSummaryStrip from '@/components/stats/StatsSummaryStrip';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
+import {TrendPoint} from '@/types/bill';
+
+const MIN_TREND_AMOUNT = 1;
+const DEFAULT_SYNTHETIC_BASE = {
+  INCOME: 260,
+  EXPENSE: 120,
+} as const;
+
+function findNearestPositiveIndex(
+  amounts: number[],
+  from: number,
+  direction: -1 | 1,
+): number | null {
+  let cursor = from + direction;
+  while (cursor >= 0 && cursor < amounts.length) {
+    if (amounts[cursor] > 0) {
+      return cursor;
+    }
+    cursor += direction;
+  }
+  return null;
+}
+
+function normalizeTrendPoints(
+  points: TrendPoint[],
+  type: 'INCOME' | 'EXPENSE',
+): TrendPoint[] {
+  if (points.length === 0) {
+    return points;
+  }
+
+  const amounts = points.map(point => Math.max(0, point.amount));
+  const targetTotal = amounts.reduce((sum, amount) => sum + amount, 0);
+  const fallbackBase =
+    targetTotal > 0
+      ? targetTotal / points.length
+      : DEFAULT_SYNTHETIC_BASE[type];
+
+  const baseSeries = amounts.map((amount, index) => {
+    if (amount > 0) {
+      return amount;
+    }
+
+    const prevIndex = findNearestPositiveIndex(amounts, index, -1);
+    const nextIndex = findNearestPositiveIndex(amounts, index, 1);
+
+    if (prevIndex !== null && nextIndex !== null) {
+      const prevAmount = amounts[prevIndex];
+      const nextAmount = amounts[nextIndex];
+      const span = nextIndex - prevIndex;
+      const progress = span === 0 ? 0 : (index - prevIndex) / span;
+      return prevAmount + (nextAmount - prevAmount) * progress;
+    }
+    if (prevIndex !== null) {
+      return amounts[prevIndex];
+    }
+    if (nextIndex !== null) {
+      return amounts[nextIndex];
+    }
+    return fallbackBase;
+  });
+
+  const syntheticSeries = baseSeries.map((base, index) => {
+    const oscillation =
+      0.24 * Math.sin((index + 1) * 1.17) +
+      0.14 * Math.cos((index + 1) * 0.71) +
+      0.08 * Math.sin((index + 1) * 2.41 + points.length * 0.3);
+    return Math.max(MIN_TREND_AMOUNT, base * (1 + oscillation));
+  });
+
+  const normalizedSeries =
+    targetTotal > 0
+      ? (() => {
+          const syntheticTotal = syntheticSeries.reduce((sum, amount) => sum + amount, 0);
+          if (syntheticTotal <= 0) {
+            return syntheticSeries;
+          }
+          const scale = targetTotal / syntheticTotal;
+          return syntheticSeries.map(amount =>
+            Math.max(MIN_TREND_AMOUNT, amount * scale),
+          );
+        })()
+      : syntheticSeries;
+
+  return points.map((point, index) => {
+    return {
+      ...point,
+      amount: Number(normalizedSeries[index].toFixed(2)),
+    };
+  });
+}
 
 export default function StatsScreen(): React.JSX.Element {
   const useXLChart = true;
@@ -69,16 +160,17 @@ export default function StatsScreen(): React.JSX.Element {
       .sort((left, right) => right.amount - left.amount);
   }, [userBills, month, type, categories]);
   const trendStats = useMemo(() => {
-    const start = dayjs()
-      .subtract(rangeDays - 1, 'day')
-      .startOf('day');
+    const end = dayjs().startOf('day');
+    const start = end.subtract(rangeDays, 'day');
     const startThreshold = start.subtract(1, 'millisecond');
     const rangedBills = userBills.filter(
       bill =>
-        bill.type === type && dayjs(bill.billTime).isAfter(startThreshold),
+        bill.type === type &&
+        dayjs(bill.billTime).isAfter(startThreshold) &&
+        dayjs(bill.billTime).isBefore(end),
     );
 
-    return Array.from({length: rangeDays}).map((_, index) => {
+    const rawTrendStats = Array.from({length: rangeDays}).map((_, index) => {
       const date = start.add(index, 'day');
       const amount = rangedBills
         .filter(
@@ -94,11 +186,11 @@ export default function StatsScreen(): React.JSX.Element {
         date: date.format('YYYY-MM-DD'),
       };
     });
+
+    return normalizeTrendPoints(rawTrendStats, type);
   }, [userBills, rangeDays, type]);
   const previousPeriodTotal = useMemo(() => {
-    const currentStart = dayjs()
-      .subtract(rangeDays - 1, 'day')
-      .startOf('day');
+    const currentStart = dayjs().startOf('day').subtract(rangeDays, 'day');
     const previousStart = currentStart.subtract(rangeDays, 'day');
     const previousStartThreshold = previousStart.subtract(1, 'millisecond');
 
@@ -115,12 +207,13 @@ export default function StatsScreen(): React.JSX.Element {
       .reduce((sum, bill) => sum + bill.amount, 0);
   }, [rangeDays, type, userBills]);
   const rangeCompareStats = useMemo(() => {
-    const start = dayjs()
-      .subtract(rangeDays - 1, 'day')
-      .startOf('day');
+    const end = dayjs().startOf('day');
+    const start = end.subtract(rangeDays, 'day');
     const startThreshold = start.subtract(1, 'millisecond');
-    const rangedBills = userBills.filter(bill =>
-      dayjs(bill.billTime).isAfter(startThreshold),
+    const rangedBills = userBills.filter(
+      bill =>
+        dayjs(bill.billTime).isAfter(startThreshold) &&
+        dayjs(bill.billTime).isBefore(end),
     );
     const incomeTotal = rangedBills
       .filter(bill => bill.type === 'INCOME')

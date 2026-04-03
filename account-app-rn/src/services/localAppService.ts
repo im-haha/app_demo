@@ -575,9 +575,11 @@ export function getTrendData(
   type: BillType,
 ): TrendPoint[] {
   const userId = ensureCurrentUserId(currentUserId);
-  const start = dayjs().subtract(rangeDays - 1, 'day').startOf('day');
+  const end = dayjs().startOf('day');
+  const start = end.subtract(rangeDays, 'day');
   const bills = listBills(data, userId, {type}).filter(bill =>
-    dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')),
+    dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')) &&
+    dayjs(bill.billTime).isBefore(end),
   );
 
   return Array.from({length: rangeDays}).map((_, index) => {

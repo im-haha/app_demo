@@ -49,7 +49,7 @@ export const useAuthStore = create<AuthState>()(
       register: async payload => {
         const username = normalizeUsername(payload.username);
         if (!username) {
-          throw new Error('用户名不能为空');
+          throw new Error('账本账号不能为空');
         }
         const nickname = payload.nickname.trim();
         if (!nickname) {
@@ -58,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
 
         const state = get();
         if (state.users.some(user => user.username === username)) {
-          throw new Error('用户名已存在');
+          throw new Error('账本账号已存在');
         }
 
         const now = nowString();
@@ -98,7 +98,7 @@ export const useAuthStore = create<AuthState>()(
         const passwordHash = hashLocalPassword(username, payload.password);
 
         if (!user || !credential || credential.passwordHash !== passwordHash) {
-          throw new Error('用户名或密码错误');
+          throw new Error('账本账号或解锁口令错误');
         }
 
         set(current => ({...current, currentUserId: user.id}));

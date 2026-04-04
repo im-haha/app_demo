@@ -53,7 +53,35 @@ import {
 import {useAuthStore} from '@/store/authStore';
 import {storageKeys} from '@/utils/storage';
 
-interface AppState extends PersistedAppData {
+type AppBusinessData = Pick<
+  PersistedAppData,
+  'schemaVersion' | 'categories' | 'accounts' | 'bills' | 'budgets'
+>;
+
+function pickBusinessData(data: PersistedAppData): AppBusinessData {
+  return {
+    schemaVersion: data.schemaVersion,
+    categories: data.categories,
+    accounts: data.accounts,
+    bills: data.bills,
+    budgets: data.budgets,
+  };
+}
+
+function buildServiceData(
+  data: AppBusinessData,
+  currentUserId: number | null,
+): PersistedAppData {
+  return {
+    ...data,
+    users: [],
+    authCredentials: [],
+    currentUserId,
+  };
+}
+
+interface AppState extends AppBusinessData {
+  currentUserId: number | null;
   hydrated: boolean;
   initialize: () => void;
   getAccounts: (options?: {includeArchived?: boolean}) => Account[];
@@ -117,26 +145,23 @@ const initialData = createInitialAppData();
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      ...initialData,
-      users: [],
-      authCredentials: [],
+      ...pickBusinessData(initialData),
       hydrated: false,
       currentUserId: useAuthStore.getState().currentUserId,
       initialize: () => {
         const state = get();
         if (state.categories.length === 0) {
-          const fresh = createInitialAppData();
+          const fresh = pickBusinessData(createInitialAppData());
           set({
             ...fresh,
-            users: [],
-            authCredentials: [],
             currentUserId: useAuthStore.getState().currentUserId,
           });
         }
       },
       getAccounts: options => {
         const state = get();
-        return listAccounts(state, state.currentUserId, options);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listAccounts(serviceData, state.currentUserId, options);
       },
       getAccountById: accountId => {
         const state = get();
@@ -145,40 +170,72 @@ export const useAppStore = create<AppState>()(
         );
       },
       addAccountRecord: payload =>
-        set(state => createAccount(state, state.currentUserId, payload)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(createAccount(serviceData, state.currentUserId, payload));
+        }),
       editAccountRecord: (accountId, payload) =>
-        set(state => updateAccount(state, state.currentUserId, accountId, payload)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(
+            updateAccount(serviceData, state.currentUserId, accountId, payload),
+          );
+        }),
       setAccountArchived: (accountId, isArchived) =>
-        set(state => archiveAccount(state, state.currentUserId, accountId, isArchived)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(
+            archiveAccount(serviceData, state.currentUserId, accountId, isArchived),
+          );
+        }),
       getCategories: type => {
         const state = get();
-        return listCategories(state, state.currentUserId, type);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listCategories(serviceData, state.currentUserId, type);
       },
-      addCategory: payload => set(state => createCategory(state, state.currentUserId, payload)),
+      addCategory: payload =>
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(createCategory(serviceData, state.currentUserId, payload));
+        }),
       editCategory: (categoryId, payload) =>
-        set(state => updateCategory(state, state.currentUserId, categoryId, payload)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(
+            updateCategory(serviceData, state.currentUserId, categoryId, payload),
+          );
+        }),
       removeCategory: categoryId =>
-        set(state => deleteCategory(state, state.currentUserId, categoryId)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(deleteCategory(serviceData, state.currentUserId, categoryId));
+        }),
       replaceCategoryAndRemove: (fromCategoryId, toCategoryId) =>
-        set(state =>
-          replaceCategoryAndDelete(
-            state,
-            state.currentUserId,
-            fromCategoryId,
-            toCategoryId,
-          ),
-        ),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(
+            replaceCategoryAndDelete(
+              serviceData,
+              state.currentUserId,
+              fromCategoryId,
+              toCategoryId,
+            ),
+          );
+        }),
       getBills: filters => {
         const state = get();
-        return listBills(state, state.currentUserId, filters);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listBills(serviceData, state.currentUserId, filters);
       },
       getBillSections: filters => {
         const state = get();
-        return listBillSections(state, state.currentUserId, filters);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listBillSections(serviceData, state.currentUserId, filters);
       },
       getAccountLedger: accountId => {
         const state = get();
-        return listAccountLedger(state, state.currentUserId, accountId);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listAccountLedger(serviceData, state.currentUserId, accountId);
       },
       getBillById: billId => {
         const state = get();
@@ -187,36 +244,55 @@ export const useAppStore = create<AppState>()(
         );
       },
       saveBillRecord: (payload, billId) =>
-        set(state => saveBill(state, state.currentUserId, payload, billId)),
-      deleteBillRecord: billId => set(state => deleteBill(state, state.currentUserId, billId)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(saveBill(serviceData, state.currentUserId, payload, billId));
+        }),
+      deleteBillRecord: billId =>
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(deleteBill(serviceData, state.currentUserId, billId));
+        }),
       setBudget: (month, amount) =>
-        set(state => upsertBudget(state, state.currentUserId, month, amount)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(upsertBudget(serviceData, state.currentUserId, month, amount));
+        }),
       getBudgetByMonth: month => {
         const state = get();
-        return getBudgetSummary(state, state.currentUserId, month);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return getBudgetSummary(serviceData, state.currentUserId, month);
       },
       getBudgetHistory: limit => {
         const state = get();
-        return listBudgetHistory(state, state.currentUserId, limit);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return listBudgetHistory(serviceData, state.currentUserId, limit);
       },
       copyBudgetFromLastMonth: month =>
-        set(state => copyLastMonthBudget(state, state.currentUserId, month)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(copyLastMonthBudget(serviceData, state.currentUserId, month));
+        }),
       getOverview: () => {
         const state = get();
-        return getOverviewStats(state, state.currentUserId);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return getOverviewStats(serviceData, state.currentUserId);
       },
       getCategoryBreakdown: (month, type) => {
         const state = get();
-        return getCategoryStats(state, state.currentUserId, month, type);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return getCategoryStats(serviceData, state.currentUserId, month, type);
       },
       getTrend: (rangeDays, type) => {
         const state = get();
-        return getTrendData(state, state.currentUserId, rangeDays, type);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return getTrendData(serviceData, state.currentUserId, rangeDays, type);
       },
       getTrendByRange: (startDate, endDate, type, filters) => {
         const state = get();
+        const serviceData = buildServiceData(state, state.currentUserId);
         return getTrendDataByRange(
-          state,
+          serviceData,
           state.currentUserId,
           startDate,
           endDate,
@@ -226,8 +302,9 @@ export const useAppStore = create<AppState>()(
       },
       getCategoryBreakdownByRange: (startDate, endDate, type, filters) => {
         const state = get();
+        const serviceData = buildServiceData(state, state.currentUserId);
         return getCategoryStatsByRange(
-          state,
+          serviceData,
           state.currentUserId,
           startDate,
           endDate,
@@ -237,8 +314,9 @@ export const useAppStore = create<AppState>()(
       },
       getPreviousPeriodTotalByRange: (startDate, endDate, type, filters) => {
         const state = get();
+        const serviceData = buildServiceData(state, state.currentUserId);
         return getPreviousPeriodTotalByRange(
-          state,
+          serviceData,
           state.currentUserId,
           startDate,
           endDate,
@@ -248,8 +326,9 @@ export const useAppStore = create<AppState>()(
       },
       getIncomeExpenseTotalsByRange: (startDate, endDate, filters) => {
         const state = get();
+        const serviceData = buildServiceData(state, state.currentUserId);
         return getIncomeExpenseTotalsByRange(
-          state,
+          serviceData,
           state.currentUserId,
           startDate,
           endDate,
@@ -258,10 +337,14 @@ export const useAppStore = create<AppState>()(
       },
       exportCurrentUserData: () => {
         const state = get();
-        return exportAppData(state, state.currentUserId);
+        const serviceData = buildServiceData(state, state.currentUserId);
+        return exportAppData(serviceData, state.currentUserId);
       },
       importCurrentUserData: payload =>
-        set(state => importAppData(state, state.currentUserId, payload)),
+        set(state => {
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return pickBusinessData(importAppData(serviceData, state.currentUserId, payload));
+        }),
     }),
     {
       name: storageKeys.app,
@@ -275,15 +358,16 @@ export const useAppStore = create<AppState>()(
       }),
       onRehydrateStorage: () => () => {
         useAppStore.setState(current => {
+          const legacyCurrent = current as unknown as Partial<PersistedAppData>;
           const persistedSnapshot = normalizePersistedAppData({
-            schemaVersion: current.schemaVersion,
-            users: current.users,
-            currentUserId: current.currentUserId,
-            authCredentials: current.authCredentials,
-            categories: current.categories,
-            accounts: current.accounts,
-            bills: current.bills,
-            budgets: current.budgets,
+            schemaVersion: legacyCurrent.schemaVersion,
+            users: legacyCurrent.users,
+            currentUserId: legacyCurrent.currentUserId,
+            authCredentials: legacyCurrent.authCredentials,
+            categories: legacyCurrent.categories,
+            accounts: legacyCurrent.accounts,
+            bills: legacyCurrent.bills,
+            budgets: legacyCurrent.budgets,
           });
           useAuthStore.getState().hydrateFromLegacy({
             users: persistedSnapshot.users,
@@ -291,19 +375,13 @@ export const useAppStore = create<AppState>()(
             authCredentials: persistedSnapshot.authCredentials,
           });
           const activeUserId = useAuthStore.getState().currentUserId;
+          const businessSnapshot = pickBusinessData(persistedSnapshot);
           const normalized = ensureUserDemoData(
-            {
-              ...persistedSnapshot,
-              users: [],
-              authCredentials: [],
-              currentUserId: activeUserId,
-            },
+            buildServiceData(businessSnapshot, activeUserId),
             activeUserId,
           );
           return {
-            ...normalized,
-            users: [],
-            authCredentials: [],
+            ...pickBusinessData(normalized),
             currentUserId: activeUserId,
             hydrated: true,
           };
@@ -324,11 +402,10 @@ useAuthStore.subscribe(state => {
       return syncedState;
     }
 
-    const ensured = ensureUserDemoData(syncedState, currentUserId);
+    const ensured = ensureUserDemoData(buildServiceData(syncedState, currentUserId), currentUserId);
     return {
-      ...ensured,
-      users: [],
-      authCredentials: [],
+      ...syncedState,
+      ...pickBusinessData(ensured),
       currentUserId,
     };
   });

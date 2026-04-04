@@ -28,6 +28,49 @@ const THEME_DESC_MAP: Record<ThemePreference, string> = {
   LIGHT: '保持当前清爽浅色风格',
   DARK: '低亮度护眼，夜间更舒适',
 };
+type BackupPhase = 'idle' | 'picking' | 'confirming' | 'importing' | 'exporting';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '请稍后重试';
+}
+
+function resolveImportFailure(error: unknown): {title: string; message: string} {
+  const rawMessage = getErrorMessage(error);
+  if (rawMessage.startsWith('AUTO_BACKUP_FAILED::')) {
+    return {
+      title: '自动备份失败',
+      message: rawMessage.replace('AUTO_BACKUP_FAILED::', ''),
+    };
+  }
+  if (rawMessage.startsWith('IMPORT_APPLY_FAILED::')) {
+    return {
+      title: '导入应用失败',
+      message: rawMessage.replace('IMPORT_APPLY_FAILED::', ''),
+    };
+  }
+  if (rawMessage.includes('暂不支持')) {
+    return {
+      title: '版本不兼容',
+      message: rawMessage,
+    };
+  }
+  if (
+    rawMessage.includes('校验失败') ||
+    rawMessage.includes('损坏') ||
+    rawMessage.includes('格式不正确') ||
+    rawMessage.includes('JSON') ||
+    rawMessage.includes('Unexpected token')
+  ) {
+    return {
+      title: '备份文件损坏',
+      message: rawMessage,
+    };
+  }
+  return {
+    title: '导入失败',
+    message: rawMessage,
+  };
+}
 
 function hexToRgba(hex: string, alpha: number): string {
   const normalized = hex.replace('#', '');
@@ -62,13 +105,27 @@ export default function MineScreen(): React.JSX.Element {
     null,
   );
   const [backupPassphrase, setBackupPassphrase] = useState('');
-  const [backupPhase, setBackupPhase] = useState<
-    'idle' | 'picking' | 'confirming' | 'importing' | 'exporting'
-  >('idle');
+  const [backupPhase, setBackupPhase] = useState<BackupPhase>('idle');
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const isBackupBusy = backupPhase !== 'idle';
+  const backupMenuDescription = useMemo(() => {
+    if (backupPhase === 'picking') {
+      return '正在选择备份文件...';
+    }
+    if (backupPhase === 'confirming') {
+      return '请确认是否覆盖当前账本';
+    }
+    if (backupPhase === 'importing') {
+      return '正在导入并校验备份...';
+    }
+    if (backupPhase === 'exporting') {
+      return '正在加密并导出备份...';
+    }
+    return '导出备份文件或选择文件导入';
+  }, [backupPhase]);
   const currentThemeLabel = THEME_LABEL_MAP[themePreference];
   const activeThemeLabel = resolvedThemeMode === 'dark' ? '深色' : '浅色';
   const modalMaskColor = isDark
@@ -76,9 +133,10 @@ export default function MineScreen(): React.JSX.Element {
     : 'rgba(24, 34, 33, 0.38)';
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
+  const canSubmitBackupPassphrase = backupPassphrase.trim().length >= 6;
 
   function openBackupPassphraseModal(action: 'IMPORT' | 'EXPORT'): void {
-    if (backupPhase !== 'idle') {
+    if (isBackupBusy) {
       return;
     }
     setBackupPassphrase('');
@@ -117,7 +175,7 @@ export default function MineScreen(): React.JSX.Element {
   }
 
   async function handleExportBackupFile(passphrase: string): Promise<void> {
-    if (backupPhase !== 'idle') {
+    if (isBackupBusy) {
       return;
     }
     try {
@@ -128,7 +186,7 @@ export default function MineScreen(): React.JSX.Element {
       });
       Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '请稍后重试';
+      const message = getErrorMessage(error);
       Alert.alert('导出失败', message);
     } finally {
       setBackupPhase('idle');
@@ -136,7 +194,7 @@ export default function MineScreen(): React.JSX.Element {
   }
 
   async function handleImportBackupFile(passphrase: string): Promise<void> {
-    if (backupPhase !== 'idle') {
+    if (isBackupBusy) {
       return;
     }
     try {
@@ -153,6 +211,7 @@ export default function MineScreen(): React.JSX.Element {
         ? `导出时间：${pickedFile.payload.exportedAt}\n`
         : '';
       setBackupPhase('confirming');
+      let shouldResetToIdleOnDismiss = true;
 
       Alert.alert(
         '确认导入备份',
@@ -167,18 +226,23 @@ export default function MineScreen(): React.JSX.Element {
             text: '继续导入',
             style: 'destructive',
             onPress: () => {
-              void confirmImportBackup(pickedFile.payload, pickedFile.fileName, passphrase);
+              shouldResetToIdleOnDismiss = false;
+              confirmImportBackup(pickedFile.payload, pickedFile.fileName, passphrase);
             },
           },
         ],
         {
-          onDismiss: () => setBackupPhase('idle'),
+          onDismiss: () => {
+            if (shouldResetToIdleOnDismiss) {
+              setBackupPhase('idle');
+            }
+          },
         },
       );
     } catch (error: unknown) {
       setBackupPhase('idle');
-      const message = error instanceof Error ? error.message : '请检查备份文件';
-      Alert.alert('导入失败', message);
+      const {title, message} = resolveImportFailure(error);
+      Alert.alert(title, message);
     }
   }
 
@@ -190,18 +254,36 @@ export default function MineScreen(): React.JSX.Element {
     try {
       setBackupPhase('importing');
       const currentPayload = await exportMyData();
-      const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
-        prefix: 'auto-backup-before-import',
-        encryptionSecret: passphrase,
-      });
-      await importMyData(payload);
+      let autoBackupName = '';
+      try {
+        const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
+          prefix: 'auto-backup-before-import',
+          encryptionSecret: passphrase,
+        });
+        autoBackupName = autoBackup.fileName;
+      } catch (error: unknown) {
+        throw new Error(`AUTO_BACKUP_FAILED::${getErrorMessage(error)}`);
+      }
+      try {
+        await importMyData(payload);
+      } catch (error: unknown) {
+        throw new Error(`IMPORT_APPLY_FAILED::${getErrorMessage(error)}`);
+      }
+
+      const importSummary = [
+        `账户 ${payload.accounts.length} 个`,
+        `分类 ${payload.categories.length} 个`,
+        `账单 ${payload.bills.length} 笔`,
+        `预算 ${payload.budgets.length} 条`,
+      ].join('，');
+
       Alert.alert(
         '导入成功',
-        `已从 ${sourceFileName} 导入数据。\n导入前自动备份：${autoBackup.fileName}`,
+        `已从 ${sourceFileName} 导入数据。\n导入摘要：${importSummary}\n导入前自动备份：${autoBackupName}`,
       );
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '请检查备份文件后重试';
-      Alert.alert('导入失败', message);
+      const {title, message} = resolveImportFailure(error);
+      Alert.alert(title, message);
     } finally {
       setBackupPhase('idle');
     }
@@ -356,7 +438,7 @@ export default function MineScreen(): React.JSX.Element {
           />
           <List.Item
             title="数据备份"
-            description="导出备份文件或选择文件导入"
+            description={backupMenuDescription}
             left={() => (
               <View
                 style={[
@@ -370,7 +452,7 @@ export default function MineScreen(): React.JSX.Element {
               </View>
             )}
             onPress={() =>
-              backupPhase !== 'idle'
+              isBackupBusy
                 ? undefined
                 : Alert.alert('数据备份', '选择需要的操作', [
                     {text: '取消', style: 'cancel'},
@@ -485,7 +567,12 @@ export default function MineScreen(): React.JSX.Element {
             />
             <View style={styles.passphraseActions}>
               <Button onPress={closeBackupPassphraseModal}>取消</Button>
-              <Button mode="contained" onPress={() => void handleBackupPassphraseConfirm()}>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  handleBackupPassphraseConfirm();
+                }}
+                disabled={!canSubmitBackupPassphrase}>
                 继续
               </Button>
             </View>

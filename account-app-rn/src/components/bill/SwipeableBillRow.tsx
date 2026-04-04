@@ -119,8 +119,9 @@ export default function SwipeableBillRow({
       );
     }
 
-    const childProps = children.props as {onPress?: () => void};
-    return React.cloneElement(children as React.ReactElement<any>, {
+    const childElement = children as React.ReactElement<{onPress?: () => void}>;
+    const childProps = childElement.props;
+    return React.cloneElement(childElement, {
       onPress: () => {
         closeRow();
         onPress?.();

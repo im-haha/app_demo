@@ -18,6 +18,20 @@ type RegisterFormState = {
   nickname: string;
 };
 
+function resolveCreateVaultError(error: unknown): {title: string; message: string} {
+  const rawMessage = error instanceof Error ? error.message : '请稍后重试';
+  if (rawMessage.includes('已存在')) {
+    return {
+      title: '账本账号已存在',
+      message: '请更换一个账本账号后再试。',
+    };
+  }
+  return {
+    title: '系统异常',
+    message: rawMessage,
+  };
+}
+
 export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   const colors = useThemeColors();
   const [form, setForm] = useState<RegisterFormState>({
@@ -39,9 +53,9 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
       setErrors({});
       await registerSchema.validate(form, {abortEarly: false});
       await register({
-        username: form.username,
+        username: form.username.trim(),
         password: form.password,
-        nickname: form.nickname,
+        nickname: form.nickname.trim(),
       });
     } catch (error: unknown) {
       if (error instanceof ValidationError) {
@@ -53,8 +67,8 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
         });
         setErrors(nextErrors);
       } else {
-        const message = error instanceof Error ? error.message : '请稍后重试';
-        Alert.alert('创建失败', message);
+        const {title, message} = resolveCreateVaultError(error);
+        Alert.alert(title, message);
       }
     } finally {
       setLoading(false);
@@ -88,7 +102,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               errorText={errors.username}
             />
             <AppInput
-              label="密码"
+              label="解锁口令"
               value={form.password}
               onChangeText={password => setForm(current => ({...current, password}))}
               secureTextEntry
@@ -98,7 +112,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               errorText={errors.password}
             />
             <AppInput
-              label="确认密码"
+              label="确认口令"
               value={form.confirmPassword}
               onChangeText={confirmPassword => setForm(current => ({...current, confirmPassword}))}
               secureTextEntry
@@ -108,10 +122,10 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               errorText={errors.confirmPassword}
             />
             <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
-              创建并进入账本
+              创建并解锁账本
             </AppButton>
             <AppButton mode="text" onPress={() => navigation.goBack()} disabled={loading}>
-              返回解锁
+              返回解锁页面
             </AppButton>
           </Card.Content>
         </Card>

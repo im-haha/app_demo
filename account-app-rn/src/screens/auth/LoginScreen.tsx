@@ -16,6 +16,20 @@ type LoginFormState = {
   password: string;
 };
 
+function resolveUnlockError(error: unknown): {title: string; message: string} {
+  const rawMessage = error instanceof Error ? error.message : '请稍后重试';
+  if (rawMessage.includes('用户名或密码错误')) {
+    return {
+      title: '账本凭证错误',
+      message: '账本账号不存在或解锁口令错误，请检查后重试。',
+    };
+  }
+  return {
+    title: '系统异常',
+    message: rawMessage,
+  };
+}
+
 export default function LoginScreen({navigation}: Props): React.JSX.Element {
   const colors = useThemeColors();
   const [form, setForm] = useState<LoginFormState>({username: '', password: ''});
@@ -31,7 +45,10 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
       setLoading(true);
       setErrors({});
       await loginSchema.validate(form, {abortEarly: false});
-      await login(form);
+      await login({
+        username: form.username.trim(),
+        password: form.password,
+      });
     } catch (error: unknown) {
       if (error instanceof ValidationError) {
         const nextErrors: Record<string, string> = {};
@@ -42,8 +59,8 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
         });
         setErrors(nextErrors);
       } else {
-        const message = error instanceof Error ? error.message : '请稍后重试';
-        Alert.alert('解锁失败', message);
+        const {title, message} = resolveUnlockError(error);
+        Alert.alert(title, message);
       }
     } finally {
       setLoading(false);
@@ -74,19 +91,20 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
               errorText={errors.username}
             />
             <AppInput
-              label="密码"
+              label="解锁口令"
               value={form.password}
               onChangeText={password => setForm(current => ({...current, password}))}
               secureTextEntry
-              autoComplete="password"
-              textContentType="password"
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
               errorText={errors.password}
             />
             <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
               解锁账本
             </AppButton>
             <AppButton mode="text" onPress={() => navigation.navigate('Register')} disabled={loading}>
-              首次使用，创建账本
+              首次使用，创建本地账本
             </AppButton>
           </Card.Content>
         </Card>

@@ -141,7 +141,7 @@ export function normalizePersistedAppData(input: LegacyPersistedAppData): Persis
 
 function ensureCurrentUserId(currentUserId: number | null): number {
   if (!currentUserId) {
-    throw new Error('请先登录');
+    throw new Error('请先解锁账本');
   }
 
   return currentUserId;
@@ -496,7 +496,7 @@ export function registerUser(data: PersistedAppData, payload: RegisterPayload): 
   const username = normalizeUsername(payload.username);
   const duplicated = data.users.find(user => user.username === username);
   if (duplicated) {
-    throw new Error('用户名已存在');
+    throw new Error('账本账号已存在');
   }
 
   const now = nowString();
@@ -534,7 +534,7 @@ export function loginUser(data: PersistedAppData, username: string, password: st
   const passwordHash = hashLocalPassword(normalizedUsername, password);
 
   if (!user || !credential || credential.passwordHash !== passwordHash) {
-    throw new Error('用户名或密码错误');
+    throw new Error('账本账号或解锁口令错误');
   }
 
   return ensureUserDemoData(

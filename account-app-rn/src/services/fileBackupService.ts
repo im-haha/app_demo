@@ -200,7 +200,7 @@ function decryptBackupPayload(
   );
   const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
   if (!plaintext) {
-    throw new Error('备份解密失败，请确认当前账本凭证是否一致');
+    throw new Error('备份解密失败，请确认备份口令是否正确');
   }
 
   const parsed = JSON.parse(plaintext);

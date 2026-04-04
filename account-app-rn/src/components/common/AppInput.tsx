@@ -22,6 +22,10 @@ interface Props {
   errorText?: string;
 }
 
+type BlurCapableInput = {
+  blur?: () => void;
+};
+
 type PasswordEyeIconProps = {
   size: number;
   color: string;
@@ -74,7 +78,7 @@ function AppInput({
   const isPasswordField = Boolean(secureTextEntry);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<BlurCapableInput | null>(null);
   const blockNextFocusRef = useRef(false);
 
   function handlePressIn(): void {
@@ -94,7 +98,9 @@ function AppInput({
         {label}
       </Text>
       <TextInput
-        ref={inputRef}
+        ref={(instance: unknown) => {
+          inputRef.current = instance as unknown as BlurCapableInput | null;
+        }}
         key={isPasswordField ? `${label}-${isPasswordVisible ? 'visible' : 'hidden'}` : label}
         value={value}
         onChangeText={onChangeText}

@@ -21,14 +21,19 @@ export default function ProfileScreen(): React.JSX.Element {
     if (saving) {
       return;
     }
-    if (!nickname.trim()) {
+    const normalizedNickname = nickname.trim();
+    if (!normalizedNickname) {
       Alert.alert('提示', '昵称不能为空');
+      return;
+    }
+    if (normalizedNickname === (user?.nickname ?? '').trim()) {
+      Alert.alert('无需保存', '昵称未发生变化');
       return;
     }
 
     try {
       setSaving(true);
-      await updateProfile({nickname});
+      await updateProfile({nickname: normalizedNickname});
       Alert.alert('已保存', '账本昵称更新成功');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '请稍后重试';

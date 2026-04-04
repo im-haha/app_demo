@@ -7,7 +7,6 @@ import {
   CartesianChart,
   Line,
   Scatter,
-  type ChartPressState,
   useChartPressState,
 } from 'victory-native';
 import {DashPathEffect, Line as SkiaLine, matchFont, vec} from '@shopify/react-native-skia';
@@ -43,26 +42,6 @@ interface TrendDatum {
   axisLabel: string;
   date: string;
 }
-
-type SharedPressState = ChartPressState<{
-  x: number;
-  y: {
-    cumulativeAmount: number;
-    dailyAmount: number;
-  };
-}>;
-type MainPressState = ChartPressState<{
-  x: number;
-  y: {
-    cumulativeAmount: number;
-  };
-}>;
-type SubPressState = ChartPressState<{
-  x: number;
-  y: {
-    dailyAmount: number;
-  };
-}>;
 
 const MAIN_CHART_HEIGHT = 208;
 const SUB_CHART_HEIGHT = MAIN_CHART_HEIGHT;
@@ -223,22 +202,24 @@ export default function CashflowTrendXLCard({
   const [chartWidth, setChartWidth] = useState(0);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [activeXPosition, setActiveXPosition] = useState(0);
-  const {state: chartPressState} = useChartPressState({
+  const {state: mainPressState} = useChartPressState({
     x: 0,
     y: {
       cumulativeAmount: 0,
+    },
+  });
+  const {state: subPressState} = useChartPressState({
+    x: 0,
+    y: {
       dailyAmount: 0,
     },
   });
-  const sharedPressState = chartPressState as SharedPressState;
-  const mainPressState = chartPressState as unknown as MainPressState;
-  const subPressState = chartPressState as unknown as SubPressState;
 
   useAnimatedReaction(
     () => ({
-      active: sharedPressState.isActive.value,
-      index: sharedPressState.matchedIndex.value,
-      x: sharedPressState.x.position.value,
+      active: mainPressState.isActive.value,
+      index: mainPressState.matchedIndex.value,
+      x: mainPressState.x.position.value,
     }),
     payload => {
       if (!payload.active || payload.index < 0) {
@@ -248,7 +229,24 @@ export default function CashflowTrendXLCard({
       runOnJS(setActiveIndex)(payload.index);
       runOnJS(setActiveXPosition)(payload.x);
     },
-    [sharedPressState],
+    [mainPressState],
+  );
+
+  useAnimatedReaction(
+    () => ({
+      active: subPressState.isActive.value,
+      index: subPressState.matchedIndex.value,
+      x: subPressState.x.position.value,
+    }),
+    payload => {
+      if (!payload.active || payload.index < 0) {
+        runOnJS(setActiveIndex)(null);
+        return;
+      }
+      runOnJS(setActiveIndex)(payload.index);
+      runOnJS(setActiveXPosition)(payload.x);
+    },
+    [subPressState],
   );
 
   useEffect(() => {

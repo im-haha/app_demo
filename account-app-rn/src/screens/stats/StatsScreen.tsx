@@ -233,7 +233,7 @@ export default function StatsScreen(): React.JSX.Element {
               value={timePreset}
               options={statsTimePresetOptions}
               onChange={setTimePreset}
-              containerStyle={{flex: 1}}
+              containerStyle={{flex: 1, minWidth: 0}}
               chipStyle={[
                 styles.filterChip,
                 {
@@ -248,7 +248,7 @@ export default function StatsScreen(): React.JSX.Element {
                 selectedCategoryId={selectedCategoryId}
                 categories={visibleCategories}
                 onChange={setSelectedCategoryId}
-                containerStyle={{flex: 1}}
+                containerStyle={{flex: 1, minWidth: 0}}
                 chipStyle={[
                   styles.filterChip,
                   {
@@ -263,7 +263,7 @@ export default function StatsScreen(): React.JSX.Element {
                 accounts={visibleAccounts}
                 selectedAccountId={selectedAccountId}
                 onChange={setSelectedAccountId}
-                containerStyle={{flex: 1}}
+                containerStyle={{flex: 1, minWidth: 0}}
                 chipStyle={[
                   styles.filterChip,
                   {
@@ -333,7 +333,7 @@ export default function StatsScreen(): React.JSX.Element {
                   accounts={visibleAccounts}
                   selectedAccountId={selectedAccountId}
                   onChange={setSelectedAccountId}
-                  containerStyle={{width: '100%'}}
+                  containerStyle={{width: '100%', minWidth: 0}}
                   chipStyle={[
                     styles.filterChip,
                     {
@@ -348,7 +348,7 @@ export default function StatsScreen(): React.JSX.Element {
                   selectedCategoryId={selectedCategoryId}
                   categories={visibleCategories}
                   onChange={setSelectedCategoryId}
-                  containerStyle={{width: '100%'}}
+                  containerStyle={{width: '100%', minWidth: 0}}
                   chipStyle={[
                     styles.filterChip,
                     {

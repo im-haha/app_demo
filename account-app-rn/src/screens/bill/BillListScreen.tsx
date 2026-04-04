@@ -51,6 +51,23 @@ function parseAmountFilterValue(text: string): number | undefined {
   return Number(parsed.toFixed(2));
 }
 
+function useDebouncedText(value: string, delayMs = 220): string {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    if (!value) {
+      setDebouncedValue('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [delayMs, value]);
+
+  return debouncedValue;
+}
+
 export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const tokens = useThemeTokens();
@@ -126,22 +143,26 @@ export default function BillListScreen(): React.JSX.Element {
     () => resolveTimeRange(timePreset, customStartDate, customEndDate),
     [timePreset, customStartDate, customEndDate],
   );
+  const debouncedMerchantKeyword = useDebouncedText(merchantKeyword);
+  const debouncedTagKeyword = useDebouncedText(tagKeyword);
+  const debouncedMinAmountText = useDebouncedText(minAmountText);
+  const debouncedMaxAmountText = useDebouncedText(maxAmountText);
   const canUseAccountPerspective = selectedAccountId !== 'ALL';
   const minAmount = useMemo(
-    () => parseAmountFilterValue(minAmountText),
-    [minAmountText],
+    () => parseAmountFilterValue(debouncedMinAmountText),
+    [debouncedMinAmountText],
   );
   const maxAmount = useMemo(
-    () => parseAmountFilterValue(maxAmountText),
-    [maxAmountText],
+    () => parseAmountFilterValue(debouncedMaxAmountText),
+    [debouncedMaxAmountText],
   );
   const billFilters = useMemo<BillFilters>(
     () => ({
       type,
       keyword,
       categoryId: selectedCategoryId,
-      merchantKeyword: merchantKeyword.trim() || undefined,
-      tagKeyword: tagKeyword.trim() || undefined,
+      merchantKeyword: debouncedMerchantKeyword.trim() || undefined,
+      tagKeyword: debouncedTagKeyword.trim() || undefined,
       minAmount,
       maxAmount,
       includeTransfers,
@@ -165,8 +186,8 @@ export default function BillListScreen(): React.JSX.Element {
       keyword,
       selectedCategoryId,
       selectedAccountId,
-      merchantKeyword,
-      tagKeyword,
+      debouncedMerchantKeyword,
+      debouncedTagKeyword,
       minAmount,
       maxAmount,
       includeTransfers,
@@ -207,11 +228,11 @@ export default function BillListScreen(): React.JSX.Element {
     if (keyword.trim()) {
       summaryParts.push(`关键词: ${keyword.trim()}`);
     }
-    if (merchantKeyword.trim()) {
-      summaryParts.push(`商户: ${merchantKeyword.trim()}`);
+    if (debouncedMerchantKeyword.trim()) {
+      summaryParts.push(`商户: ${debouncedMerchantKeyword.trim()}`);
     }
-    if (tagKeyword.trim()) {
-      summaryParts.push(`标签: ${tagKeyword.trim()}`);
+    if (debouncedTagKeyword.trim()) {
+      summaryParts.push(`标签: ${debouncedTagKeyword.trim()}`);
     }
     if (minAmount !== undefined || maxAmount !== undefined) {
       summaryParts.push(
@@ -226,8 +247,8 @@ export default function BillListScreen(): React.JSX.Element {
     return summaryParts.join(' · ');
   }, [
     keyword,
-    merchantKeyword,
-    tagKeyword,
+    debouncedMerchantKeyword,
+    debouncedTagKeyword,
     minAmount,
     maxAmount,
     includeTransfers,
@@ -369,458 +390,11 @@ export default function BillListScreen(): React.JSX.Element {
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <View style={{flex: 1}}>
-        <View
-          style={{
-            paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 10,
-            gap: 10,
-          }}>
-          <View style={{gap: 8}}>
-            <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-              全部账单
-            </Text>
-            <View
-              style={{
-                borderRadius: tokens.radius.xl,
-                backgroundColor: tokens.surface.accent,
-                borderWidth: 1,
-                borderColor: tokens.borderTone.strong,
-                minHeight: tokens.size.controlHeight,
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 12,
-              }}>
-              <SearchLineIcon />
-              <TextInput
-                value={keywordInput}
-                onChangeText={setKeywordInput}
-                placeholder="搜索备注/分类/商户/标签/金额/账户/日期"
-                placeholderTextColor={isDark ? '#95A4AA' : '#7A837D'}
-                style={{
-                  flex: 1,
-                  marginLeft: 10,
-                  marginRight: hasSearchText ? 8 : 0,
-                  color: colors.text,
-                  fontWeight: '600',
-                  fontSize: 16,
-                  paddingVertical: 0,
-                }}
-                keyboardType="default"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="done"
-              />
-              {hasSearchText ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="清空搜索关键词"
-                  onPress={handleClearSearch}
-                  hitSlop={6}
-                  style={({pressed}) => ({
-                    width: 24,
-                    height: 24,
-                    borderRadius: tokens.radius.pill,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: pressed
-                      ? tokens.interactive.selected
-                      : isDark
-                        ? 'rgba(255,255,255,0.12)'
-                        : 'rgba(0,0,0,0.12)',
-                  })}>
-                  <Text
-                    style={{
-                      color: isDark ? '#EAF2F0' : '#4A4F52',
-                      fontSize: 16,
-                      lineHeight: 18,
-                      fontWeight: '700',
-                    }}>
-                    ×
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
-
-          <View style={{gap: 8}}>
-            <Pressable
-              onPress={() => setAdvancedVisible(current => !current)}
-              accessibilityRole="button"
-              accessibilityLabel={advancedVisible ? '收起更多筛选' : '展开更多筛选'}
-              accessibilityState={{expanded: advancedVisible}}
-              style={({pressed}) => ({
-                minHeight: tokens.size.touchMin,
-                borderRadius: tokens.radius.md,
-                backgroundColor: pressed ? tokens.interactive.pressed : tokens.surface.muted,
-                borderWidth: 1,
-                borderColor: tokens.borderTone.strong,
-                paddingHorizontal: 12,
-                paddingVertical: 9,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              })}>
-              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
-                更多筛选
-              </Text>
-              <Text variant="labelMedium" style={{color: colors.muted}}>
-                {advancedVisible ? '收起' : '展开'}
-              </Text>
-            </Pressable>
-            {advancedVisible ? (
-              <View
-                style={{
-                  borderRadius: tokens.radius.lg,
-                  backgroundColor: tokens.surface.muted,
-                  borderWidth: 1,
-                  borderColor: tokens.borderTone.strong,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  gap: 10,
-                }}>
-                <AccountFilterMenu
-                  accounts={visibleAccounts}
-                  selectedAccountId={selectedAccountId}
-                  onChange={setSelectedAccountId}
-                  containerStyle={{width: '100%'}}
-                  chipStyle={{
-                    minHeight: tokens.size.chipHeight,
-                    borderRadius: tokens.radius.pill,
-                    justifyContent: 'center',
-                    paddingHorizontal: 12,
-                    borderWidth: 1,
-                    borderColor: tokens.borderTone.strong,
-                    backgroundColor: colors.surface,
-                  }}
-                  textStyle={{fontWeight: '600', color: colors.text}}
-                />
-                <AppInput
-                  label="商户关键词"
-                  placeholder="例如：京东 / 瑞幸 / 滴滴"
-                  value={merchantKeyword}
-                  onChangeText={setMerchantKeyword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <AppInput
-                  label="标签关键词"
-                  placeholder="例如：报销 / 通勤 / 工作餐"
-                  value={tagKeyword}
-                  onChangeText={setTagKeyword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <View style={{flexDirection: 'row', gap: 8}}>
-                  <View style={{flex: 1}}>
-                    <AppInput
-                      label="最低金额"
-                      placeholder="0"
-                      value={minAmountText}
-                      onChangeText={value =>
-                        setMinAmountText(sanitizeAmountFilterInput(value))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                  <View style={{flex: 1}}>
-                    <AppInput
-                      label="最高金额"
-                      placeholder="不限"
-                      value={maxAmountText}
-                      onChangeText={value =>
-                        setMaxAmountText(sanitizeAmountFilterInput(value))
-                      }
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                </View>
-                <View style={{gap: 8}}>
-                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
-                    转账口径
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      borderRadius: tokens.radius.pill,
-                      padding: 2,
-                      backgroundColor: tokens.surface.accent,
-                      alignSelf: 'flex-start',
-                    }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="包含转账"
-                      accessibilityState={{selected: includeTransfers}}
-                      onPress={() => setIncludeTransfers(true)}
-                      style={({pressed}) => ({
-                        minWidth: 86,
-                        minHeight: tokens.size.touchMin,
-                        borderRadius: tokens.radius.pill,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: includeTransfers
-                          ? isDark
-                            ? '#2A3544'
-                            : '#DFD2FF'
-                          : pressed
-                            ? tokens.interactive.pressed
-                            : 'transparent',
-                      })}>
-                      <Text
-                        variant="labelMedium"
-                        style={{
-                          fontWeight: '700',
-                          color: includeTransfers
-                            ? isDark
-                              ? '#EAF2F0'
-                              : '#213042'
-                            : colors.muted,
-                        }}>
-                        包含转账
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="排除转账"
-                      accessibilityState={{selected: !includeTransfers}}
-                      onPress={() => setIncludeTransfers(false)}
-                      style={({pressed}) => ({
-                        minWidth: 86,
-                        minHeight: tokens.size.touchMin,
-                        borderRadius: tokens.radius.pill,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: includeTransfers
-                          ? pressed
-                            ? tokens.interactive.pressed
-                            : 'transparent'
-                          : isDark
-                            ? '#2A3544'
-                            : '#DFD2FF',
-                      })}>
-                      <Text
-                        variant="labelMedium"
-                        style={{
-                          fontWeight: '700',
-                          color: includeTransfers
-                            ? colors.muted
-                            : isDark
-                              ? '#EAF2F0'
-                              : '#213042',
-                        }}>
-                        排除转账
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-                <View style={{gap: 8}}>
-                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
-                    转账视角
-                  </Text>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      borderRadius: tokens.radius.pill,
-                      padding: 2,
-                      backgroundColor: tokens.surface.accent,
-                      alignSelf: 'flex-start',
-                    }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="默认视角"
-                      accessibilityState={{selected: !isAccountPerspectiveEnabled}}
-                      onPress={() => handleAccountPerspectiveToggle(false)}
-                      style={({pressed}) => ({
-                        minWidth: 72,
-                        minHeight: tokens.size.touchMin,
-                        borderRadius: tokens.radius.pill,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: isAccountPerspectiveEnabled
-                          ? pressed
-                            ? tokens.interactive.pressed
-                            : 'transparent'
-                          : isDark
-                            ? '#2A3544'
-                            : '#DFD2FF',
-                      })}>
-                      <Text
-                        variant="labelMedium"
-                        style={{
-                          fontWeight: '700',
-                          color: isAccountPerspectiveEnabled
-                            ? colors.muted
-                            : isDark
-                              ? '#EAF2F0'
-                              : '#213042',
-                        }}>
-                        默认
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="账户视角"
-                      accessibilityState={{
-                        selected: isAccountPerspectiveEnabled,
-                        disabled: !canUseAccountPerspective,
-                      }}
-                      disabled={!canUseAccountPerspective}
-                      onPress={() => handleAccountPerspectiveToggle(true)}
-                      style={({pressed}) => ({
-                        minWidth: 92,
-                        minHeight: tokens.size.touchMin,
-                        borderRadius: tokens.radius.pill,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: isAccountPerspectiveEnabled
-                          ? isDark
-                            ? '#2A3544'
-                            : '#DFD2FF'
-                          : pressed
-                            ? tokens.interactive.pressed
-                            : 'transparent',
-                        opacity: canUseAccountPerspective ? 1 : 0.5,
-                      })}>
-                      <Text
-                        variant="labelMedium"
-                        style={{
-                          fontWeight: '700',
-                          color: isAccountPerspectiveEnabled
-                            ? isDark
-                              ? '#EAF2F0'
-                              : '#213042'
-                            : colors.muted,
-                        }}>
-                        账户视角
-                      </Text>
-                    </Pressable>
-                  </View>
-                  <Text variant="bodySmall" style={{color: colors.muted}}>
-                    {canUseAccountPerspective
-                      ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
-                      : '先选择一个账户，再开启账户视角。'}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={{flexDirection: 'row', gap: 8}}>
-            <TimePresetBar<BillTimePreset>
-              value={timePreset}
-              options={billTimePresetOptions}
-              onChange={setTimePreset}
-              containerStyle={{flex: 1}}
-              chipStyle={{
-                minHeight: tokens.size.chipHeight,
-                borderRadius: tokens.radius.pill,
-                justifyContent: 'center',
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderColor: tokens.borderTone.strong,
-                backgroundColor: tokens.surface.muted,
-              }}
-              textStyle={{fontWeight: '600', color: colors.text}}
-            />
-            <CategoryFilterMenu
-              selectedCategoryId={selectedCategoryId}
-              categories={visibleCategories}
-              onChange={setSelectedCategoryId}
-              containerStyle={{flex: 1}}
-              chipStyle={{
-                minHeight: tokens.size.chipHeight,
-                borderRadius: tokens.radius.pill,
-                justifyContent: 'center',
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderColor: tokens.borderTone.strong,
-                backgroundColor: tokens.surface.muted,
-              }}
-              textStyle={{fontWeight: '600', color: colors.text}}
-            />
-          </View>
-
-          {timePreset === 'CUSTOM' ? (
-            <DateRangeFields
-              startDate={customStartDate}
-              endDate={customEndDate}
-              onStartDateChange={setCustomStartDate}
-              onEndDateChange={setCustomEndDate}
-            />
-          ) : null}
-
-          <View
-            onLayout={event => setFilterSwitchWidth(event.nativeEvent.layout.width)}
-            style={{
-              height: 56,
-              backgroundColor: tokens.surface.muted,
-              borderRadius: 28,
-              borderWidth: 1,
-              borderColor: tokens.borderTone.strong,
-              padding: 2,
-              flexDirection: 'row',
-              overflow: 'hidden',
-            }}>
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 2,
-                left: 0,
-                height: 52,
-                width: indicatorWidth,
-                borderRadius: 26,
-                backgroundColor:
-                  type === 'EXPENSE'
-                    ? isDark
-                      ? 'rgba(224,106,58,0.28)'
-                      : 'rgba(224,106,58,0.16)'
-                    : type === 'INCOME'
-                      ? isDark
-                        ? 'rgba(45,156,116,0.3)'
-                        : 'rgba(45,156,116,0.18)'
-                      : isDark
-                        ? '#283244'
-                        : '#E7E0FB',
-                transform: [{translateX: indicatorTranslateX}],
-              }}
-            />
-            {filterTypeOptions.map(item => (
-              <Pressable
-                key={item.value}
-                accessibilityRole="button"
-                accessibilityLabel={`筛选${item.label}`}
-                accessibilityState={{selected: type === item.value}}
-                style={({pressed}) => ({
-                  flex: 1,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  zIndex: 1,
-                  opacity: pressed ? 0.88 : 1,
-                })}
-                onPress={() => handleTypeChange(item.value)}>
-                <Text
-                  variant="titleMedium"
-                  style={{
-                    fontWeight: '700',
-                    color: getFilterTextColor(item.value),
-                  }}>
-                  {item.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <FilterSummaryChips
-            summaryText={activeFilterSummary}
-            onClear={clearAllFilters}
-            summaryTextStyle={{color: colors.muted}}
-            clearTextStyle={{color: colors.primary}}
-            containerStyle={{paddingHorizontal: 2}}
-          />
-        </View>
         <SectionList
           sections={sections}
           onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           keyExtractor={item => String(item.id)}
           renderSectionHeader={renderSectionHeader}
           renderItem={({item}) => (
@@ -864,10 +438,459 @@ export default function BillListScreen(): React.JSX.Element {
             </View>
           )}
           stickySectionHeadersEnabled={false}
+          ListHeaderComponent={
+            <View
+              style={{
+                paddingTop: 12,
+                paddingBottom: 10,
+                gap: 10,
+              }}>
+              <View style={{gap: 8}}>
+                <Text variant="headlineSmall" style={{fontWeight: '800'}}>
+                  全部账单
+                </Text>
+                <View
+                  style={{
+                    borderRadius: tokens.radius.xl,
+                    backgroundColor: tokens.surface.accent,
+                    borderWidth: 1,
+                    borderColor: tokens.borderTone.strong,
+                    minHeight: tokens.size.controlHeight,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 12,
+                  }}>
+                  <SearchLineIcon />
+                  <TextInput
+                    value={keywordInput}
+                    onChangeText={setKeywordInput}
+                    placeholder="搜索备注/分类/商户/标签/金额/账户/日期"
+                    placeholderTextColor={isDark ? '#95A4AA' : '#7A837D'}
+                    style={{
+                      flex: 1,
+                      marginLeft: 10,
+                      marginRight: hasSearchText ? 8 : 0,
+                      color: colors.text,
+                      fontWeight: '600',
+                      fontSize: 16,
+                      paddingVertical: 0,
+                    }}
+                    keyboardType="default"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                  />
+                  {hasSearchText ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="清空搜索关键词"
+                      onPress={handleClearSearch}
+                      hitSlop={6}
+                      style={({pressed}) => ({
+                        width: 24,
+                        height: 24,
+                        borderRadius: tokens.radius.pill,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: pressed
+                          ? tokens.interactive.selected
+                          : isDark
+                            ? 'rgba(255,255,255,0.12)'
+                            : 'rgba(0,0,0,0.12)',
+                      })}>
+                      <Text
+                        style={{
+                          color: isDark ? '#EAF2F0' : '#4A4F52',
+                          fontSize: 16,
+                          lineHeight: 18,
+                          fontWeight: '700',
+                        }}>
+                        ×
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={{gap: 8}}>
+                <Pressable
+                  onPress={() => setAdvancedVisible(current => !current)}
+                  accessibilityRole="button"
+                  accessibilityLabel={advancedVisible ? '收起更多筛选' : '展开更多筛选'}
+                  accessibilityState={{expanded: advancedVisible}}
+                  style={({pressed}) => ({
+                    minHeight: tokens.size.touchMin,
+                    borderRadius: tokens.radius.md,
+                    backgroundColor: pressed ? tokens.interactive.pressed : tokens.surface.muted,
+                    borderWidth: 1,
+                    borderColor: tokens.borderTone.strong,
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  })}>
+                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                    更多筛选
+                  </Text>
+                  <Text variant="labelMedium" style={{color: colors.muted}}>
+                    {advancedVisible ? '收起' : '展开'}
+                  </Text>
+                </Pressable>
+                {advancedVisible ? (
+                  <View
+                    style={{
+                      borderRadius: tokens.radius.lg,
+                      backgroundColor: tokens.surface.muted,
+                      borderWidth: 1,
+                      borderColor: tokens.borderTone.strong,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      gap: 10,
+                    }}>
+                    <AccountFilterMenu
+                      accounts={visibleAccounts}
+                      selectedAccountId={selectedAccountId}
+                      onChange={setSelectedAccountId}
+                      containerStyle={{width: '100%', minWidth: 0}}
+                      chipStyle={{
+                        minHeight: tokens.size.chipHeight,
+                        borderRadius: tokens.radius.pill,
+                        justifyContent: 'center',
+                        paddingHorizontal: 12,
+                        borderWidth: 1,
+                        borderColor: tokens.borderTone.strong,
+                        backgroundColor: colors.surface,
+                      }}
+                      textStyle={{fontWeight: '600', color: colors.text}}
+                    />
+                    <AppInput
+                      label="商户关键词"
+                      placeholder="例如：京东 / 瑞幸 / 滴滴"
+                      value={merchantKeyword}
+                      onChangeText={setMerchantKeyword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <AppInput
+                      label="标签关键词"
+                      placeholder="例如：报销 / 通勤 / 工作餐"
+                      value={tagKeyword}
+                      onChangeText={setTagKeyword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <View style={{flexDirection: 'row', gap: 8}}>
+                      <View style={{flex: 1}}>
+                        <AppInput
+                          label="最低金额"
+                          placeholder="0"
+                          value={minAmountText}
+                          onChangeText={value =>
+                            setMinAmountText(sanitizeAmountFilterInput(value))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                      <View style={{flex: 1}}>
+                        <AppInput
+                          label="最高金额"
+                          placeholder="不限"
+                          value={maxAmountText}
+                          onChangeText={value =>
+                            setMaxAmountText(sanitizeAmountFilterInput(value))
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+                    </View>
+                    <View style={{gap: 8}}>
+                      <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                        转账口径
+                      </Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          borderRadius: tokens.radius.pill,
+                          padding: 2,
+                          backgroundColor: tokens.surface.accent,
+                          alignSelf: 'flex-start',
+                        }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="包含转账"
+                          accessibilityState={{selected: includeTransfers}}
+                          onPress={() => setIncludeTransfers(true)}
+                          style={({pressed}) => ({
+                            minWidth: 86,
+                            minHeight: tokens.size.touchMin,
+                            borderRadius: tokens.radius.pill,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: includeTransfers
+                              ? isDark
+                                ? '#2A3544'
+                                : '#DFD2FF'
+                              : pressed
+                                ? tokens.interactive.pressed
+                                : 'transparent',
+                          })}>
+                          <Text
+                            variant="labelMedium"
+                            style={{
+                              fontWeight: '700',
+                              color: includeTransfers
+                                ? isDark
+                                  ? '#EAF2F0'
+                                  : '#213042'
+                                : colors.muted,
+                            }}>
+                            包含转账
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="排除转账"
+                          accessibilityState={{selected: !includeTransfers}}
+                          onPress={() => setIncludeTransfers(false)}
+                          style={({pressed}) => ({
+                            minWidth: 86,
+                            minHeight: tokens.size.touchMin,
+                            borderRadius: tokens.radius.pill,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: includeTransfers
+                              ? pressed
+                                ? tokens.interactive.pressed
+                                : 'transparent'
+                              : isDark
+                                ? '#2A3544'
+                                : '#DFD2FF',
+                          })}>
+                          <Text
+                            variant="labelMedium"
+                            style={{
+                              fontWeight: '700',
+                              color: includeTransfers
+                                ? colors.muted
+                                : isDark
+                                  ? '#EAF2F0'
+                                  : '#213042',
+                            }}>
+                            排除转账
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    <View style={{gap: 8}}>
+                      <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                        转账视角
+                      </Text>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          borderRadius: tokens.radius.pill,
+                          padding: 2,
+                          backgroundColor: tokens.surface.accent,
+                          alignSelf: 'flex-start',
+                        }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="默认视角"
+                          accessibilityState={{selected: !isAccountPerspectiveEnabled}}
+                          onPress={() => handleAccountPerspectiveToggle(false)}
+                          style={({pressed}) => ({
+                            minWidth: 72,
+                            minHeight: tokens.size.touchMin,
+                            borderRadius: tokens.radius.pill,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isAccountPerspectiveEnabled
+                              ? pressed
+                                ? tokens.interactive.pressed
+                                : 'transparent'
+                              : isDark
+                                ? '#2A3544'
+                                : '#DFD2FF',
+                          })}>
+                          <Text
+                            variant="labelMedium"
+                            style={{
+                              fontWeight: '700',
+                              color: isAccountPerspectiveEnabled
+                                ? colors.muted
+                                : isDark
+                                  ? '#EAF2F0'
+                                  : '#213042',
+                            }}>
+                            默认
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="账户视角"
+                          accessibilityState={{
+                            selected: isAccountPerspectiveEnabled,
+                            disabled: !canUseAccountPerspective,
+                          }}
+                          disabled={!canUseAccountPerspective}
+                          onPress={() => handleAccountPerspectiveToggle(true)}
+                          style={({pressed}) => ({
+                            minWidth: 92,
+                            minHeight: tokens.size.touchMin,
+                            borderRadius: tokens.radius.pill,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: isAccountPerspectiveEnabled
+                              ? isDark
+                                ? '#2A3544'
+                                : '#DFD2FF'
+                              : pressed
+                                ? tokens.interactive.pressed
+                                : 'transparent',
+                            opacity: canUseAccountPerspective ? 1 : 0.5,
+                          })}>
+                          <Text
+                            variant="labelMedium"
+                            style={{
+                              fontWeight: '700',
+                              color: isAccountPerspectiveEnabled
+                                ? isDark
+                                  ? '#EAF2F0'
+                                  : '#213042'
+                                : colors.muted,
+                            }}>
+                            账户视角
+                          </Text>
+                        </Pressable>
+                      </View>
+                      <Text variant="bodySmall" style={{color: colors.muted}}>
+                        {canUseAccountPerspective
+                          ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
+                          : '先选择一个账户，再开启账户视角。'}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={{flexDirection: 'row', gap: 8}}>
+                <TimePresetBar<BillTimePreset>
+                  value={timePreset}
+                  options={billTimePresetOptions}
+                  onChange={setTimePreset}
+                  containerStyle={{flex: 1, minWidth: 0}}
+                  chipStyle={{
+                    minHeight: tokens.size.chipHeight,
+                    borderRadius: tokens.radius.pill,
+                    justifyContent: 'center',
+                    paddingHorizontal: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.borderTone.strong,
+                    backgroundColor: tokens.surface.muted,
+                  }}
+                  textStyle={{fontWeight: '600', color: colors.text}}
+                />
+                <CategoryFilterMenu
+                  selectedCategoryId={selectedCategoryId}
+                  categories={visibleCategories}
+                  onChange={setSelectedCategoryId}
+                  containerStyle={{flex: 1, minWidth: 0}}
+                  chipStyle={{
+                    minHeight: tokens.size.chipHeight,
+                    borderRadius: tokens.radius.pill,
+                    justifyContent: 'center',
+                    paddingHorizontal: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.borderTone.strong,
+                    backgroundColor: tokens.surface.muted,
+                  }}
+                  textStyle={{fontWeight: '600', color: colors.text}}
+                />
+              </View>
+
+              {timePreset === 'CUSTOM' ? (
+                <DateRangeFields
+                  startDate={customStartDate}
+                  endDate={customEndDate}
+                  onStartDateChange={setCustomStartDate}
+                  onEndDateChange={setCustomEndDate}
+                />
+              ) : null}
+
+              <View
+                onLayout={event => setFilterSwitchWidth(event.nativeEvent.layout.width)}
+                style={{
+                  height: 56,
+                  backgroundColor: tokens.surface.muted,
+                  borderRadius: 28,
+                  borderWidth: 1,
+                  borderColor: tokens.borderTone.strong,
+                  padding: 2,
+                  flexDirection: 'row',
+                  overflow: 'hidden',
+                }}>
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    left: 0,
+                    height: 52,
+                    width: indicatorWidth,
+                    borderRadius: 26,
+                    backgroundColor:
+                      type === 'EXPENSE'
+                        ? isDark
+                          ? 'rgba(224,106,58,0.28)'
+                          : 'rgba(224,106,58,0.16)'
+                        : type === 'INCOME'
+                          ? isDark
+                            ? 'rgba(45,156,116,0.3)'
+                            : 'rgba(45,156,116,0.18)'
+                          : isDark
+                            ? '#283244'
+                            : '#E7E0FB',
+                    transform: [{translateX: indicatorTranslateX}],
+                  }}
+                />
+                {filterTypeOptions.map(item => (
+                  <Pressable
+                    key={item.value}
+                    accessibilityRole="button"
+                    accessibilityLabel={`筛选${item.label}`}
+                    accessibilityState={{selected: type === item.value}}
+                    style={({pressed}) => ({
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 1,
+                      opacity: pressed ? 0.88 : 1,
+                    })}
+                    onPress={() => handleTypeChange(item.value)}>
+                    <Text
+                      variant="titleMedium"
+                      style={{
+                        fontWeight: '700',
+                        color: getFilterTextColor(item.value),
+                      }}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <FilterSummaryChips
+                summaryText={activeFilterSummary}
+                onClear={clearAllFilters}
+                summaryTextStyle={{color: colors.muted}}
+                clearTextStyle={{color: colors.primary}}
+                containerStyle={{paddingHorizontal: 2}}
+              />
+            </View>
+          }
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: listBottomPadding,
-            paddingTop: 8,
             flexGrow: 1,
           }}
           ListEmptyComponent={

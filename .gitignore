@@ -13,6 +13,8 @@ account-app-rn/android/.gradle/
 account-app-rn/*.keystore
 account-app-rn/*.jks
 account-app-rn/android/keystore.properties
+account-app-rn/android/sentry.properties
+account-app-rn/ios/sentry.properties
 account-app-rn/android/app/*.keystore
 account-app-rn/android/app/*.jks
 account-app-rn/android/app/src/main/assets/

@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import {reportHandledError} from '@/lib/reportError';
 import {
   Account,
   AccountLedgerDirection,
@@ -1739,23 +1740,31 @@ export function exportAppData(
   data: PersistedAppData,
   currentUserId: number | null,
 ): AppDataExportPayload {
-  const userId = ensureCurrentUserId(currentUserId);
-  const accounts = data.accounts.filter(account => account.userId === userId);
-  const categories = data.categories.filter(
-    category => category.userId === null || category.userId === userId,
-  );
-  const bills = data.bills.filter(bill => bill.userId === userId);
-  const budgets = data.budgets.filter(budget => budget.userId === userId);
+  try {
+    const userId = ensureCurrentUserId(currentUserId);
+    const accounts = data.accounts.filter(account => account.userId === userId);
+    const categories = data.categories.filter(
+      category => category.userId === null || category.userId === userId,
+    );
+    const bills = data.bills.filter(bill => bill.userId === userId);
+    const budgets = data.budgets.filter(budget => budget.userId === userId);
 
-  return {
-    schemaVersion: data.schemaVersion,
-    exportedAt: nowString(),
-    userId,
-    accounts,
-    categories,
-    bills,
-    budgets,
-  };
+    return {
+      schemaVersion: data.schemaVersion,
+      exportedAt: nowString(),
+      userId,
+      accounts,
+      categories,
+      bills,
+      budgets,
+    };
+  } catch (error) {
+    reportHandledError(error, {
+      feature: 'backup',
+      action: 'exportAppData',
+    });
+    throw error;
+  }
 }
 
 export function importAppData(
@@ -1763,152 +1772,163 @@ export function importAppData(
   currentUserId: number | null,
   payload: AppDataExportPayload,
 ): PersistedAppData {
-  const userId = ensureCurrentUserId(currentUserId);
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('导入数据格式不正确');
-  }
-  if (!SUPPORTED_BACKUP_SCHEMA_VERSIONS.has(payload.schemaVersion)) {
-    throw new Error(`备份版本 ${String(payload.schemaVersion)} 暂不支持，请先升级应用`);
-  }
-  if (!Array.isArray(payload.accounts)) {
-    throw new Error('备份文件缺少 accounts 数组');
-  }
-  if (!Array.isArray(payload.categories)) {
-    throw new Error('备份文件缺少 categories 数组');
-  }
-  if (!Array.isArray(payload.bills)) {
-    throw new Error('备份文件缺少 bills 数组');
-  }
-  if (!Array.isArray(payload.budgets)) {
-    throw new Error('备份文件缺少 budgets 数组');
-  }
+  try {
+    const userId = ensureCurrentUserId(currentUserId);
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('导入数据格式不正确');
+    }
+    if (!SUPPORTED_BACKUP_SCHEMA_VERSIONS.has(payload.schemaVersion)) {
+      throw new Error(`备份版本 ${String(payload.schemaVersion)} 暂不支持，请先升级应用`);
+    }
+    if (!Array.isArray(payload.accounts)) {
+      throw new Error('备份文件缺少 accounts 数组');
+    }
+    if (!Array.isArray(payload.categories)) {
+      throw new Error('备份文件缺少 categories 数组');
+    }
+    if (!Array.isArray(payload.bills)) {
+      throw new Error('备份文件缺少 bills 数组');
+    }
+    if (!Array.isArray(payload.budgets)) {
+      throw new Error('备份文件缺少 budgets 数组');
+    }
 
-  const importedAccounts = payload.accounts;
-  const importedCategories = payload.categories;
-  const importedBills = payload.bills;
-  const importedBudgets = payload.budgets;
+    const importedAccounts = payload.accounts;
+    const importedCategories = payload.categories;
+    const importedBills = payload.bills;
+    const importedBudgets = payload.budgets;
 
-  validateBackupAccounts(importedAccounts);
-  validateBackupCategories(importedCategories);
-  validateBackupBills(importedBills, importedAccounts, importedCategories);
-  validateBackupBudgets(importedBudgets);
+    validateBackupAccounts(importedAccounts);
+    validateBackupCategories(importedCategories);
+    validateBackupBills(importedBills, importedAccounts, importedCategories);
+    validateBackupBudgets(importedBudgets);
 
-  const now = nowString();
+    const now = nowString();
 
-  const accountsWithoutUser = data.accounts.filter(account => account.userId !== userId);
-  const categoriesWithoutUser = data.categories.filter(category => category.userId !== userId);
-  const billsWithoutUser = data.bills.filter(bill => bill.userId !== userId);
-  const budgetsWithoutUser = data.budgets.filter(budget => budget.userId !== userId);
-  const importedCategoryById = new Map(importedCategories.map(category => [category.id, category]));
+    const accountsWithoutUser = data.accounts.filter(account => account.userId !== userId);
+    const categoriesWithoutUser = data.categories.filter(category => category.userId !== userId);
+    const billsWithoutUser = data.bills.filter(bill => bill.userId !== userId);
+    const budgetsWithoutUser = data.budgets.filter(budget => budget.userId !== userId);
+    const importedCategoryById = new Map(importedCategories.map(category => [category.id, category]));
 
-  let nextAccountId = nextId(data.accounts);
-  const accountIdMapping = new Map<number, number>();
-  const normalizedUserAccounts: Account[] = importedAccounts
-    .map((account, index) => {
-      const normalized: Account = {
-        ...account,
-        id: nextAccountId,
+    let nextAccountId = nextId(data.accounts);
+    const accountIdMapping = new Map<number, number>();
+    const normalizedUserAccounts: Account[] = importedAccounts
+      .map((account, index) => {
+        const normalized: Account = {
+          ...account,
+          id: nextAccountId,
+          userId,
+          name: (account.name ?? '').trim() || `账户${index + 1}`,
+          openingBalance: roundCurrency(account.openingBalance ?? 0),
+          currentBalance: roundCurrency(account.currentBalance ?? account.openingBalance ?? 0),
+          includeInTotal: account.includeInTotal !== false,
+          isArchived: Boolean(account.isArchived),
+          sortNum: Number.isFinite(account.sortNum) ? account.sortNum : index + 1,
+          createdAt: account.createdAt ?? now,
+          updatedAt: now,
+        };
+        accountIdMapping.set(account.id, nextAccountId);
+        nextAccountId += 1;
+        return normalized;
+      });
+
+    let nextCategoryId = nextId(data.categories);
+    const categoryIdMapping = new Map<number, number>();
+    const normalizedUserCategories: Category[] = importedCategories
+      .filter(category => category.userId !== null)
+      .map(category => {
+        const normalized: Category = {
+          ...category,
+          id: nextCategoryId,
+          userId,
+          name: category.name.trim(),
+          updatedAt: now,
+        };
+        categoryIdMapping.set(category.id, nextCategoryId);
+        nextCategoryId += 1;
+        return normalized;
+      });
+
+    let nextBillId = nextId(data.bills);
+    const normalizedUserBills: BillRecord[] = importedBills.map(bill => {
+      const mappedCategoryId = categoryIdMapping.get(bill.categoryId);
+      const importedCategory = importedCategoryById.get(bill.categoryId);
+      const mappedDefaultCategoryId =
+        importedCategory?.userId === null
+          ? categoriesWithoutUser.find(
+              category =>
+                category.userId === null &&
+                category.type === importedCategory.type &&
+                category.name === importedCategory.name,
+            )?.id
+          : undefined;
+      const mappedAccountId =
+        bill.accountId !== undefined && bill.accountId !== null
+          ? accountIdMapping.get(bill.accountId)
+          : undefined;
+      const mappedTransferTargetAccountId =
+        bill.transferTargetAccountId !== undefined &&
+        bill.transferTargetAccountId !== null
+          ? accountIdMapping.get(bill.transferTargetAccountId)
+          : undefined;
+      const fallbackAccount =
+        normalizedUserAccounts.find(
+          account => account.type === bill.accountType && !account.isArchived,
+        ) ??
+        normalizedUserAccounts.find(account => !account.isArchived) ??
+        normalizedUserAccounts[0];
+      const fallbackCategoryId =
+        normalizedUserCategories.find(category => category.type === bill.type)?.id ??
+        categoriesWithoutUser.find(category => category.type === bill.type)?.id ??
+        1;
+
+      const normalized: BillRecord = {
+        ...bill,
+        id: nextBillId,
         userId,
-        name: (account.name ?? '').trim() || `账户${index + 1}`,
-        openingBalance: roundCurrency(account.openingBalance ?? 0),
-        currentBalance: roundCurrency(account.currentBalance ?? account.openingBalance ?? 0),
-        includeInTotal: account.includeInTotal !== false,
-        isArchived: Boolean(account.isArchived),
-        sortNum: Number.isFinite(account.sortNum) ? account.sortNum : index + 1,
-        createdAt: account.createdAt ?? now,
+        categoryId: mappedCategoryId ?? mappedDefaultCategoryId ?? fallbackCategoryId,
+        accountId: mappedAccountId ?? fallbackAccount?.id ?? null,
+        accountType: bill.accountType ?? fallbackAccount?.type ?? 'OTHER',
+        transferTargetAccountId: mappedTransferTargetAccountId ?? null,
+        remark: bill.remark ?? '',
+        source: bill.source ?? 'IMPORT',
         updatedAt: now,
       };
-      accountIdMapping.set(account.id, nextAccountId);
-      nextAccountId += 1;
+      nextBillId += 1;
       return normalized;
     });
 
-  let nextCategoryId = nextId(data.categories);
-  const categoryIdMapping = new Map<number, number>();
-  const normalizedUserCategories: Category[] = importedCategories
-    .filter(category => category.userId !== null)
-    .map(category => {
-      const normalized: Category = {
-        ...category,
-        id: nextCategoryId,
+    let nextBudgetId = nextId(data.budgets);
+    const normalizedUserBudgets: BudgetSetting[] = importedBudgets.map(budget => {
+      const normalized: BudgetSetting = {
+        ...budget,
+        id: nextBudgetId,
         userId,
-        name: category.name.trim(),
         updatedAt: now,
       };
-      categoryIdMapping.set(category.id, nextCategoryId);
-      nextCategoryId += 1;
+      nextBudgetId += 1;
       return normalized;
     });
 
-  let nextBillId = nextId(data.bills);
-  const normalizedUserBills: BillRecord[] = importedBills.map(bill => {
-    const mappedCategoryId = categoryIdMapping.get(bill.categoryId);
-    const importedCategory = importedCategoryById.get(bill.categoryId);
-    const mappedDefaultCategoryId =
-      importedCategory?.userId === null
-        ? categoriesWithoutUser.find(
-            category =>
-              category.userId === null &&
-              category.type === importedCategory.type &&
-              category.name === importedCategory.name,
-          )?.id
-        : undefined;
-    const mappedAccountId =
-      bill.accountId !== undefined && bill.accountId !== null
-        ? accountIdMapping.get(bill.accountId)
-        : undefined;
-    const mappedTransferTargetAccountId =
-      bill.transferTargetAccountId !== undefined &&
-      bill.transferTargetAccountId !== null
-        ? accountIdMapping.get(bill.transferTargetAccountId)
-        : undefined;
-    const fallbackAccount =
-      normalizedUserAccounts.find(
-        account => account.type === bill.accountType && !account.isArchived,
-      ) ??
-      normalizedUserAccounts.find(account => !account.isArchived) ??
-      normalizedUserAccounts[0];
-    const fallbackCategoryId =
-      normalizedUserCategories.find(category => category.type === bill.type)?.id ??
-      categoriesWithoutUser.find(category => category.type === bill.type)?.id ??
-      1;
-
-    const normalized: BillRecord = {
-      ...bill,
-      id: nextBillId,
+    return ensureUserAccountDomainData(
+      {
+        ...data,
+        accounts: [...accountsWithoutUser, ...normalizedUserAccounts],
+        categories: [...categoriesWithoutUser, ...normalizedUserCategories],
+        bills: [...billsWithoutUser, ...normalizedUserBills],
+        budgets: [...budgetsWithoutUser, ...normalizedUserBudgets],
+      },
       userId,
-      categoryId: mappedCategoryId ?? mappedDefaultCategoryId ?? fallbackCategoryId,
-      accountId: mappedAccountId ?? fallbackAccount?.id ?? null,
-      accountType: bill.accountType ?? fallbackAccount?.type ?? 'OTHER',
-      transferTargetAccountId: mappedTransferTargetAccountId ?? null,
-      remark: bill.remark ?? '',
-      source: bill.source ?? 'IMPORT',
-      updatedAt: now,
-    };
-    nextBillId += 1;
-    return normalized;
-  });
-
-  let nextBudgetId = nextId(data.budgets);
-  const normalizedUserBudgets: BudgetSetting[] = importedBudgets.map(budget => {
-    const normalized: BudgetSetting = {
-      ...budget,
-      id: nextBudgetId,
-      userId,
-      updatedAt: now,
-    };
-    nextBudgetId += 1;
-    return normalized;
-  });
-
-  return ensureUserAccountDomainData(
-    {
-      ...data,
-      accounts: [...accountsWithoutUser, ...normalizedUserAccounts],
-      categories: [...categoriesWithoutUser, ...normalizedUserCategories],
-      bills: [...billsWithoutUser, ...normalizedUserBills],
-      budgets: [...budgetsWithoutUser, ...normalizedUserBudgets],
-    },
-    userId,
-  );
+    );
+  } catch (error) {
+    reportHandledError(error, {
+      feature: 'backup',
+      action: 'importAppData',
+      extra: {
+        hasPayload: Boolean(payload),
+      },
+    });
+    throw error;
+  }
 }

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
+import {reportHandledError} from '@/lib/reportError';
 import {
   Account,
   AccountLedgerEntry,
@@ -80,6 +81,18 @@ function buildServiceData(
   };
 }
 
+function reportAppStoreError(
+  error: unknown,
+  action: string,
+  extra?: Record<string, unknown>,
+): void {
+  reportHandledError(error, {
+    feature: 'appStore',
+    action,
+    extra,
+  });
+}
+
 interface AppState extends AppBusinessData {
   currentUserId: number | null;
   hydrated: boolean;
@@ -149,13 +162,18 @@ export const useAppStore = create<AppState>()(
       hydrated: false,
       currentUserId: useAuthStore.getState().currentUserId,
       initialize: () => {
-        const state = get();
-        if (state.categories.length === 0) {
-          const fresh = pickBusinessData(createInitialAppData());
-          set({
-            ...fresh,
-            currentUserId: useAuthStore.getState().currentUserId,
-          });
+        try {
+          const state = get();
+          if (state.categories.length === 0) {
+            const fresh = pickBusinessData(createInitialAppData());
+            set({
+              ...fresh,
+              currentUserId: useAuthStore.getState().currentUserId,
+            });
+          }
+        } catch (error) {
+          reportAppStoreError(error, 'initialize');
+          throw error;
         }
       },
       getAccounts: options => {
@@ -336,14 +354,26 @@ export const useAppStore = create<AppState>()(
         );
       },
       exportCurrentUserData: () => {
-        const state = get();
-        const serviceData = buildServiceData(state, state.currentUserId);
-        return exportAppData(serviceData, state.currentUserId);
+        try {
+          const state = get();
+          const serviceData = buildServiceData(state, state.currentUserId);
+          return exportAppData(serviceData, state.currentUserId);
+        } catch (error) {
+          reportAppStoreError(error, 'exportCurrentUserData');
+          throw error;
+        }
       },
       importCurrentUserData: payload =>
         set(state => {
-          const serviceData = buildServiceData(state, state.currentUserId);
-          return pickBusinessData(importAppData(serviceData, state.currentUserId, payload));
+          try {
+            const serviceData = buildServiceData(state, state.currentUserId);
+            return pickBusinessData(importAppData(serviceData, state.currentUserId, payload));
+          } catch (error) {
+            reportAppStoreError(error, 'importCurrentUserData', {
+              hasPayload: Boolean(payload),
+            });
+            throw error;
+          }
         }),
     }),
     {
@@ -357,56 +387,66 @@ export const useAppStore = create<AppState>()(
         budgets: state.budgets,
       }),
       onRehydrateStorage: () => () => {
-        useAppStore.setState(current => {
-          const legacyCurrent = current as unknown as Partial<PersistedAppData>;
-          const persistedSnapshot = normalizePersistedAppData({
-            schemaVersion: legacyCurrent.schemaVersion,
-            users: legacyCurrent.users,
-            currentUserId: legacyCurrent.currentUserId,
-            authCredentials: legacyCurrent.authCredentials,
-            categories: legacyCurrent.categories,
-            accounts: legacyCurrent.accounts,
-            bills: legacyCurrent.bills,
-            budgets: legacyCurrent.budgets,
+        try {
+          useAppStore.setState(current => {
+            const legacyCurrent = current as unknown as Partial<PersistedAppData>;
+            const persistedSnapshot = normalizePersistedAppData({
+              schemaVersion: legacyCurrent.schemaVersion,
+              users: legacyCurrent.users,
+              currentUserId: legacyCurrent.currentUserId,
+              authCredentials: legacyCurrent.authCredentials,
+              categories: legacyCurrent.categories,
+              accounts: legacyCurrent.accounts,
+              bills: legacyCurrent.bills,
+              budgets: legacyCurrent.budgets,
+            });
+            useAuthStore.getState().hydrateFromLegacy({
+              users: persistedSnapshot.users,
+              currentUserId: persistedSnapshot.currentUserId,
+              authCredentials: persistedSnapshot.authCredentials,
+            });
+            const activeUserId = useAuthStore.getState().currentUserId;
+            const businessSnapshot = pickBusinessData(persistedSnapshot);
+            const normalized = ensureUserDemoData(
+              buildServiceData(businessSnapshot, activeUserId),
+              activeUserId,
+            );
+            return {
+              ...pickBusinessData(normalized),
+              currentUserId: activeUserId,
+              hydrated: true,
+            };
           });
-          useAuthStore.getState().hydrateFromLegacy({
-            users: persistedSnapshot.users,
-            currentUserId: persistedSnapshot.currentUserId,
-            authCredentials: persistedSnapshot.authCredentials,
-          });
-          const activeUserId = useAuthStore.getState().currentUserId;
-          const businessSnapshot = pickBusinessData(persistedSnapshot);
-          const normalized = ensureUserDemoData(
-            buildServiceData(businessSnapshot, activeUserId),
-            activeUserId,
-          );
-          return {
-            ...pickBusinessData(normalized),
-            currentUserId: activeUserId,
-            hydrated: true,
-          };
-        });
+        } catch (error) {
+          reportAppStoreError(error, 'rehydrate');
+          throw error;
+        }
       },
     },
   ),
 );
 
 useAuthStore.subscribe(state => {
-  const {currentUserId} = state;
-  useAppStore.setState(previous => {
-    const syncedState =
-      previous.currentUserId === currentUserId
-        ? previous
-        : {...previous, currentUserId};
-    if (!currentUserId) {
-      return syncedState;
-    }
+  try {
+    const {currentUserId} = state;
+    useAppStore.setState(previous => {
+      const syncedState =
+        previous.currentUserId === currentUserId
+          ? previous
+          : {...previous, currentUserId};
+      if (!currentUserId) {
+        return syncedState;
+      }
 
-    const ensured = ensureUserDemoData(buildServiceData(syncedState, currentUserId), currentUserId);
-    return {
-      ...syncedState,
-      ...pickBusinessData(ensured),
-      currentUserId,
-    };
-  });
+      const ensured = ensureUserDemoData(buildServiceData(syncedState, currentUserId), currentUserId);
+      return {
+        ...syncedState,
+        ...pickBusinessData(ensured),
+        currentUserId,
+      };
+    });
+  } catch (error) {
+    reportAppStoreError(error, 'authStateSync');
+    throw error;
+  }
 });

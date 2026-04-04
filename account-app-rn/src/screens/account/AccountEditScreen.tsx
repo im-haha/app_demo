@@ -6,6 +6,8 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import EmptyState from '@/components/common/EmptyState';
+import {withErrorCapture} from '@/lib/errorCapture';
+import {reportHandledError} from '@/lib/reportError';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
 import {useThemeColors} from '@/theme';
@@ -75,10 +77,27 @@ export default function AccountEditScreen({navigation, route}: Props): React.JSX
       Alert.alert('保存成功', '账户信息已更新');
       navigation.goBack();
     } catch (error: unknown) {
+      reportHandledError(error, {
+        screen: 'AccountEdit',
+        action: accountId ? 'editAccount' : 'createAccount',
+        feature: 'account',
+        extra: {
+          accountId: accountId ?? null,
+        },
+      });
       const message = error instanceof Error ? error.message : '请稍后重试';
       Alert.alert('保存失败', message);
     }
   }
+
+  const handleSavePress = withErrorCapture(handleSave, {
+    screen: 'AccountEdit',
+    action: 'pressSave',
+    feature: 'account',
+    extra: {
+      accountId: accountId ?? null,
+    },
+  });
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['bottom']}>
@@ -153,7 +172,7 @@ export default function AccountEditScreen({navigation, route}: Props): React.JSX
           </Card.Content>
         </Card>
 
-        <AppButton onPress={handleSave}>保存账户</AppButton>
+        <AppButton onPress={handleSavePress}>保存账户</AppButton>
       </ScrollView>
     </SafeAreaView>
   );

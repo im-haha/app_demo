@@ -1,10 +1,13 @@
-import React, {useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {Alert, KeyboardAvoidingView, Platform, ScrollView} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Card, Text} from 'react-native-paper';
 import {ValidationError} from 'yup';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
+import SecureInputWarmup from '@/components/common/SecureInputWarmup';
+import {withErrorCapture} from '@/lib/errorCapture';
+import {reportHandledError} from '@/lib/reportError';
 import {AuthStackParamList} from '@/navigation/types';
 import {register} from '@/api/auth';
 import {registerSchema} from '@/utils/validate';
@@ -43,6 +46,26 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const handleNicknameChange = useCallback((nickname: string) => {
+    setForm(current => (current.nickname === nickname ? current : {...current, nickname}));
+  }, []);
+
+  const handleUsernameChange = useCallback((username: string) => {
+    setForm(current => (current.username === username ? current : {...current, username}));
+  }, []);
+
+  const handlePasswordChange = useCallback((password: string) => {
+    setForm(current => (current.password === password ? current : {...current, password}));
+  }, []);
+
+  const handleConfirmPasswordChange = useCallback((confirmPassword: string) => {
+    setForm(current =>
+      current.confirmPassword === confirmPassword
+        ? current
+        : {...current, confirmPassword},
+    );
+  }, []);
+
   async function handleSubmit() {
     if (loading) {
       return;
@@ -68,6 +91,13 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
         setErrors(nextErrors);
       } else {
         const {title, message} = resolveCreateVaultError(error);
+        if (title === '系统异常') {
+          reportHandledError(error, {
+            screen: 'Register',
+            action: 'submit',
+            feature: 'auth',
+          });
+        }
         Alert.alert(title, message);
       }
     } finally {
@@ -75,11 +105,26 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
     }
   }
 
+  const handleSubmitPress = withErrorCapture(handleSubmit, {
+    screen: 'Register',
+    action: 'pressSubmit',
+    feature: 'auth',
+  });
+
+  const handleGoBackPress = withErrorCapture(() => navigation.goBack(), {
+    screen: 'Register',
+    action: 'goBack',
+    feature: 'auth',
+  });
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{flex: 1, backgroundColor: colors.background}}>
-      <ScrollView contentContainerStyle={{padding: 20, justifyContent: 'center', flexGrow: 1}}>
+      <SecureInputWarmup />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{padding: 20, paddingVertical: 32}}>
         <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
           <Card.Content style={{paddingVertical: 20, gap: 20}}>
             <Text variant="headlineSmall" style={{fontWeight: '800'}}>
@@ -88,7 +133,8 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="账本昵称"
               value={form.nickname}
-              onChangeText={nickname => setForm(current => ({...current, nickname}))}
+              onChangeText={handleNicknameChange}
+              nativeStyle
               autoComplete="off"
               textContentType="nickname"
               errorText={errors.nickname}
@@ -96,7 +142,8 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="账本账号"
               value={form.username}
-              onChangeText={username => setForm(current => ({...current, username}))}
+              onChangeText={handleUsernameChange}
+              nativeStyle
               autoComplete="username"
               textContentType="username"
               errorText={errors.username}
@@ -104,7 +151,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="解锁口令"
               value={form.password}
-              onChangeText={password => setForm(current => ({...current, password}))}
+              onChangeText={handlePasswordChange}
               secureTextEntry
               autoComplete="off"
               textContentType="none"
@@ -114,17 +161,17 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="确认口令"
               value={form.confirmPassword}
-              onChangeText={confirmPassword => setForm(current => ({...current, confirmPassword}))}
+              onChangeText={handleConfirmPasswordChange}
               secureTextEntry
               autoComplete="off"
               textContentType="none"
               importantForAutofill="no"
               errorText={errors.confirmPassword}
             />
-            <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
+            <AppButton onPress={handleSubmitPress} loading={loading} disabled={loading}>
               创建并解锁账本
             </AppButton>
-            <AppButton mode="text" onPress={() => navigation.goBack()} disabled={loading}>
+            <AppButton mode="text" onPress={handleGoBackPress} disabled={loading}>
               返回解锁页面
             </AppButton>
           </Card.Content>

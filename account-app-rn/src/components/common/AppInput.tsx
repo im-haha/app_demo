@@ -1,6 +1,6 @@
-import React, {useRef, useState} from 'react';
-import {TextInput, Text} from 'react-native-paper';
-import {Keyboard, View} from 'react-native';
+import React, {useCallback, useState} from 'react';
+import {Platform, Pressable, StyleSheet, TextInput as NativeTextInput, View} from 'react-native';
+import {Text, TextInput as PaperTextInput} from 'react-native-paper';
 import type {TextInputProps as RNTextInputProps} from 'react-native';
 import Svg, {Circle, Path} from 'react-native-svg';
 import {useThemeColors} from '@/theme';
@@ -19,12 +19,9 @@ interface Props {
   autoCapitalize?: RNTextInputProps['autoCapitalize'];
   autoCorrect?: boolean;
   spellCheck?: boolean;
+  nativeStyle?: boolean;
   errorText?: string;
 }
-
-type BlurCapableInput = {
-  blur?: () => void;
-};
 
 type PasswordEyeIconProps = {
   size: number;
@@ -32,7 +29,11 @@ type PasswordEyeIconProps = {
   hidden: boolean;
 };
 
-function PasswordEyeIcon({size, color, hidden}: PasswordEyeIconProps): React.JSX.Element {
+const PasswordEyeIcon = React.memo(function PasswordEyeIcon({
+  size,
+  color,
+  hidden,
+}: PasswordEyeIconProps): React.JSX.Element {
   const iconSize = Math.max(16, size - 4);
 
   return (
@@ -56,7 +57,7 @@ function PasswordEyeIcon({size, color, hidden}: PasswordEyeIconProps): React.JSX
       ) : null}
     </Svg>
   );
-}
+});
 
 function AppInput({
   label,
@@ -72,23 +73,25 @@ function AppInput({
   autoCapitalize = 'none',
   autoCorrect = false,
   spellCheck,
+  nativeStyle = false,
   errorText,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
   const isPasswordField = Boolean(secureTextEntry);
+  const useNativeStyle = isPasswordField || nativeStyle;
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<BlurCapableInput | null>(null);
-  const blockNextFocusRef = useRef(false);
+  const resolvedSecureAutoComplete =
+    Platform.OS === 'ios' && isPasswordField && autoComplete === 'off'
+      ? ('one-time-code' as RNTextInputProps['autoComplete'])
+      : autoComplete;
+  const resolvedSecureTextContentType =
+    Platform.OS === 'ios' && isPasswordField && textContentType === 'none'
+      ? ('oneTimeCode' as RNTextInputProps['textContentType'])
+      : textContentType;
 
-  function handlePressIn(): void {
-    if (!isFocused) {
-      return;
-    }
-    blockNextFocusRef.current = true;
-    inputRef.current?.blur?.();
-    Keyboard.dismiss();
-  }
+  const handlePasswordVisibleToggle = useCallback(() => {
+    setIsPasswordVisible(current => !current);
+  }, []);
 
   return (
     <View style={{gap: 8, marginTop: 2}}>
@@ -97,59 +100,73 @@ function AppInput({
         style={{marginLeft: 12, color: colors.muted, fontWeight: '600'}}>
         {label}
       </Text>
-      <TextInput
-        ref={(instance: unknown) => {
-          inputRef.current = instance as unknown as BlurCapableInput | null;
-        }}
-        key={isPasswordField ? `${label}-${isPasswordVisible ? 'visible' : 'hidden'}` : label}
-        value={value}
-        onChangeText={onChangeText}
-        onPressIn={handlePressIn}
-        onFocus={() => {
-          if (blockNextFocusRef.current) {
-            blockNextFocusRef.current = false;
-            inputRef.current?.blur?.();
-            Keyboard.dismiss();
-            return;
-          }
-          setIsFocused(true);
-        }}
-        onBlur={() => setIsFocused(false)}
-        placeholder={placeholder}
-        secureTextEntry={isPasswordField ? !isPasswordVisible : false}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        autoComplete={isPasswordField ? 'off' : autoComplete}
-        textContentType={isPasswordField ? 'none' : textContentType}
-        importantForAutofill={importantForAutofill}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={isPasswordField ? false : autoCorrect}
-        spellCheck={isPasswordField ? false : spellCheck}
-        right={
-          isPasswordField ? (
-            <TextInput.Icon
-              icon={({color = '#6F7A76', size = 20}) => (
-                <PasswordEyeIcon
-                  color={color}
-                  size={size}
-                  hidden={!isPasswordVisible}
-                />
-              )}
-              forceTextInputFocus={false}
-              onPress={() => setIsPasswordVisible(current => !current)}
-              style={{marginRight: 4}}
-            />
-          ) : undefined
-        }
-        mode="outlined"
-        outlineStyle={{borderRadius: 18}}
-        contentStyle={{
-          paddingLeft: 8,
-          paddingRight: 10,
-          paddingVertical: 12,
-          fontSize: 16,
-        }}
-      />
+      {useNativeStyle ? (
+        <View
+          style={[
+            styles.inputWrapper,
+            {
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+              paddingRight: isPasswordField ? 8 : 16,
+            },
+          ]}>
+          <NativeTextInput
+            value={value}
+            onChangeText={onChangeText}
+            placeholder={placeholder}
+            placeholderTextColor={colors.muted}
+            secureTextEntry={isPasswordField ? !isPasswordVisible : false}
+            keyboardType={keyboardType}
+            multiline={multiline}
+            autoComplete={isPasswordField ? resolvedSecureAutoComplete : autoComplete}
+            textContentType={isPasswordField ? resolvedSecureTextContentType : textContentType}
+            importantForAutofill={importantForAutofill}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={isPasswordField ? false : autoCorrect}
+            spellCheck={isPasswordField ? false : spellCheck}
+            textAlignVertical={multiline ? 'top' : 'center'}
+            style={[
+              styles.input,
+              multiline ? styles.multilineInput : null,
+              {
+                color: colors.text,
+              },
+            ]}
+          />
+          {isPasswordField ? (
+            <Pressable
+              accessibilityLabel={isPasswordVisible ? '隐藏口令' : '显示口令'}
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={handlePasswordVisibleToggle}
+              style={styles.passwordToggleButton}>
+              <PasswordEyeIcon color={colors.muted} size={20} hidden={!isPasswordVisible} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <PaperTextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          keyboardType={keyboardType}
+          multiline={multiline}
+          autoComplete={autoComplete}
+          textContentType={textContentType}
+          importantForAutofill={importantForAutofill}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          spellCheck={spellCheck}
+          mode="outlined"
+          outlineStyle={{borderRadius: 18}}
+          contentStyle={{
+            paddingLeft: 8,
+            paddingRight: 10,
+            paddingVertical: 12,
+            fontSize: 16,
+          }}
+        />
+      )}
       {errorText ? (
         <Text variant="bodySmall" style={{color: '#C44536', lineHeight: 18}}>
           {errorText}
@@ -158,5 +175,33 @@ function AppInput({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  inputWrapper: {
+    borderWidth: 1,
+    borderRadius: 18,
+    minHeight: 56,
+    paddingLeft: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: 12,
+    paddingRight: 8,
+  },
+  multilineInput: {
+    minHeight: 88,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  passwordToggleButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+});
 
 export default React.memo(AppInput);

@@ -3,6 +3,7 @@ import CryptoJS from 'crypto-js';
 import DocumentPicker, {isCancel, types} from 'react-native-document-picker';
 import RNFS from 'react-native-fs';
 import Share from 'react-native-share';
+import {reportHandledError} from '@/lib/reportError';
 import {AppDataExportPayload} from '@/services/localAppService';
 
 const SUPPORTED_BACKUP_SCHEMA_VERSIONS = new Set([3, 4]);
@@ -282,6 +283,12 @@ export async function pickBackupPayloadFromFile(options: {
     if (isCancel(error)) {
       return null;
     }
+
+    reportHandledError(error, {
+      feature: 'backup',
+      action: 'pickBackupPayloadFromFile',
+    });
+
     throw error;
   }
 }

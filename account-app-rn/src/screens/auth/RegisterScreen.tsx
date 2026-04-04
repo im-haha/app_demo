@@ -5,6 +5,8 @@ import {Card, Text} from 'react-native-paper';
 import {ValidationError} from 'yup';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
+import {withErrorCapture} from '@/lib/errorCapture';
+import {reportHandledError} from '@/lib/reportError';
 import {AuthStackParamList} from '@/navigation/types';
 import {register} from '@/api/auth';
 import {registerSchema} from '@/utils/validate';
@@ -68,12 +70,31 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
         setErrors(nextErrors);
       } else {
         const {title, message} = resolveCreateVaultError(error);
+        if (title === '系统异常') {
+          reportHandledError(error, {
+            screen: 'Register',
+            action: 'submit',
+            feature: 'auth',
+          });
+        }
         Alert.alert(title, message);
       }
     } finally {
       setLoading(false);
     }
   }
+
+  const handleSubmitPress = withErrorCapture(handleSubmit, {
+    screen: 'Register',
+    action: 'pressSubmit',
+    feature: 'auth',
+  });
+
+  const handleGoBackPress = withErrorCapture(() => navigation.goBack(), {
+    screen: 'Register',
+    action: 'goBack',
+    feature: 'auth',
+  });
 
   return (
     <KeyboardAvoidingView
@@ -121,10 +142,10 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               importantForAutofill="no"
               errorText={errors.confirmPassword}
             />
-            <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
+            <AppButton onPress={handleSubmitPress} loading={loading} disabled={loading}>
               创建并解锁账本
             </AppButton>
-            <AppButton mode="text" onPress={() => navigation.goBack()} disabled={loading}>
+            <AppButton mode="text" onPress={handleGoBackPress} disabled={loading}>
               返回解锁页面
             </AppButton>
           </Card.Content>

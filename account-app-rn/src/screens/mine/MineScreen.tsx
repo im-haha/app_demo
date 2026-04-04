@@ -9,6 +9,8 @@ import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
 import {useMainTabNavigation} from '@/navigation/hooks';
 import {exportMyData, importMyData} from '@/api/data';
+import {withErrorCapture} from '@/lib/errorCapture';
+import {reportHandledError} from '@/lib/reportError';
 import {AppDataExportPayload} from '@/services/localAppService';
 import {
   exportBackupByShare,
@@ -87,6 +89,19 @@ function hexToRgba(hex: string, alpha: number): string {
   const b = Number.parseInt(full.slice(4, 6), 16);
 
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function reportMineHandledError(
+  error: unknown,
+  action: string,
+  extra?: Record<string, unknown>,
+): void {
+  reportHandledError(error, {
+    screen: 'Mine',
+    feature: 'mine',
+    action,
+    extra,
+  });
 }
 
 export default function MineScreen(): React.JSX.Element {
@@ -186,6 +201,7 @@ export default function MineScreen(): React.JSX.Element {
       });
       Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
     } catch (error: unknown) {
+      reportMineHandledError(error, 'exportBackupFile');
       const message = getErrorMessage(error);
       Alert.alert('导出失败', message);
     } finally {
@@ -241,6 +257,7 @@ export default function MineScreen(): React.JSX.Element {
       );
     } catch (error: unknown) {
       setBackupPhase('idle');
+      reportMineHandledError(error, 'importBackupFile.pickOrConfirm');
       const {title, message} = resolveImportFailure(error);
       Alert.alert(title, message);
     }
@@ -282,12 +299,146 @@ export default function MineScreen(): React.JSX.Element {
         `已从 ${sourceFileName} 导入数据。\n导入摘要：${importSummary}\n导入前自动备份：${autoBackupName}`,
       );
     } catch (error: unknown) {
+      reportMineHandledError(error, 'importBackupFile.confirm', {
+        sourceFileName,
+      });
       const {title, message} = resolveImportFailure(error);
       Alert.alert(title, message);
     } finally {
       setBackupPhase('idle');
     }
   }
+
+  const handleNavigateProfilePress = withErrorCapture(
+    () => navigation.navigate('Profile'),
+    {
+      screen: 'Mine',
+      action: 'navigateProfile',
+      feature: 'mineMenu',
+    },
+  );
+
+  const handleNavigateBudgetPress = withErrorCapture(
+    () => navigation.navigate('Budget'),
+    {
+      screen: 'Mine',
+      action: 'navigateBudget',
+      feature: 'mineMenu',
+    },
+  );
+
+  const handleNavigateAccountListPress = withErrorCapture(
+    () => navigation.navigate('AccountList'),
+    {
+      screen: 'Mine',
+      action: 'navigateAccountList',
+      feature: 'mineMenu',
+    },
+  );
+
+  const handleNavigateCategoryManagePress = withErrorCapture(
+    () => navigation.navigate('CategoryManage'),
+    {
+      screen: 'Mine',
+      action: 'navigateCategoryManage',
+      feature: 'mineMenu',
+    },
+  );
+
+  const handleOpenBackupImportPress = withErrorCapture(
+    () => openBackupPassphraseModal('IMPORT'),
+    {
+      screen: 'Mine',
+      action: 'openBackupImport',
+      feature: 'backup',
+    },
+  );
+
+  const handleOpenBackupExportPress = withErrorCapture(
+    () => openBackupPassphraseModal('EXPORT'),
+    {
+      screen: 'Mine',
+      action: 'openBackupExport',
+      feature: 'backup',
+    },
+  );
+
+  const handleOpenBackupMenuPress = withErrorCapture(
+    () => {
+      if (isBackupBusy) {
+        return;
+      }
+
+      Alert.alert('数据备份', '选择需要的操作', [
+        {text: '取消', style: 'cancel'},
+        {
+          text: '导入',
+          onPress: handleOpenBackupImportPress,
+        },
+        {
+          text: '导出',
+          onPress: handleOpenBackupExportPress,
+        },
+      ]);
+    },
+    {
+      screen: 'Mine',
+      action: 'openBackupMenu',
+      feature: 'backup',
+    },
+  );
+
+  const handleOpenThemeDialogPress = withErrorCapture(
+    () => setThemeDialogVisible(true),
+    {
+      screen: 'Mine',
+      action: 'openThemeDialog',
+      feature: 'theme',
+    },
+  );
+
+  const handleCloseThemeDialogPress = withErrorCapture(
+    () => setThemeDialogVisible(false),
+    {
+      screen: 'Mine',
+      action: 'closeThemeDialog',
+      feature: 'theme',
+    },
+  );
+
+  const handleSetThemePreferencePress = withErrorCapture(
+    (option: ThemePreference) => setThemePreference(option),
+    option => ({
+      screen: 'Mine',
+      action: 'setThemePreference',
+      feature: 'theme',
+      extra: {option},
+    }),
+  );
+
+  const handleLogoutPress = withErrorCapture(() => logout(), {
+    screen: 'Mine',
+    action: 'logout',
+    feature: 'auth',
+  });
+
+  const handleCloseBackupPassphraseModalPress = withErrorCapture(
+    closeBackupPassphraseModal,
+    {
+      screen: 'Mine',
+      action: 'closeBackupPassphraseModal',
+      feature: 'backup',
+    },
+  );
+
+  const handleBackupPassphraseConfirmPress = withErrorCapture(
+    handleBackupPassphraseConfirm,
+    {
+      screen: 'Mine',
+      action: 'confirmBackupPassphrase',
+      feature: 'backup',
+    },
+  );
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -352,7 +503,7 @@ export default function MineScreen(): React.JSX.Element {
                 />
               </View>
             )}
-            onPress={() => navigation.navigate('Profile')}
+            onPress={handleNavigateProfilePress}
           />
           <List.Item
             title="月预算"
@@ -377,7 +528,7 @@ export default function MineScreen(): React.JSX.Element {
                 />
               </View>
             )}
-            onPress={() => navigation.navigate('Budget')}
+            onPress={handleNavigateBudgetPress}
           />
           <List.Item
             title="账户管理"
@@ -394,7 +545,7 @@ export default function MineScreen(): React.JSX.Element {
                 <Text style={{color: colors.primary, fontWeight: '700'}}>¥</Text>
               </View>
             )}
-            onPress={() => navigation.navigate('AccountList')}
+            onPress={handleNavigateAccountListPress}
           />
           <List.Item
             title="分类管理"
@@ -434,7 +585,7 @@ export default function MineScreen(): React.JSX.Element {
                 />
               </View>
             )}
-            onPress={() => navigation.navigate('CategoryManage')}
+            onPress={handleNavigateCategoryManagePress}
           />
           <List.Item
             title="数据备份"
@@ -451,25 +602,7 @@ export default function MineScreen(): React.JSX.Element {
                 <Text style={{color: colors.primary, fontWeight: '700'}}>↕</Text>
               </View>
             )}
-            onPress={() =>
-              isBackupBusy
-                ? undefined
-                : Alert.alert('数据备份', '选择需要的操作', [
-                    {text: '取消', style: 'cancel'},
-                    {
-                      text: '导入',
-                      onPress: () => {
-                        openBackupPassphraseModal('IMPORT');
-                      },
-                    },
-                    {
-                      text: '导出',
-                      onPress: () => {
-                        openBackupPassphraseModal('EXPORT');
-                      },
-                    },
-                  ])
-            }
+            onPress={handleOpenBackupMenuPress}
           />
           <List.Item
             title="关于"
@@ -504,7 +637,7 @@ export default function MineScreen(): React.JSX.Element {
                 <Text style={{color: '#8F78C4', fontWeight: '700'}}>A</Text>
               </View>
             )}
-            onPress={() => setThemeDialogVisible(true)}
+            onPress={handleOpenThemeDialogPress}
           />
         </Card>
 
@@ -531,14 +664,14 @@ export default function MineScreen(): React.JSX.Element {
               </View>
             )}
             titleStyle={{color: colors.danger}}
-            onPress={logout}
+            onPress={handleLogoutPress}
           />
         </Card>
       </ScrollView>
       <Portal>
         <Modal
           visible={backupPassphraseModalVisible}
-          onDismiss={closeBackupPassphraseModal}
+          onDismiss={handleCloseBackupPassphraseModalPress}
           contentContainerStyle={styles.passphraseModalContainer}
           style={{backgroundColor: modalMaskColor}}>
           <View
@@ -566,12 +699,10 @@ export default function MineScreen(): React.JSX.Element {
               placeholder="至少 6 位"
             />
             <View style={styles.passphraseActions}>
-              <Button onPress={closeBackupPassphraseModal}>取消</Button>
+              <Button onPress={handleCloseBackupPassphraseModalPress}>取消</Button>
               <Button
                 mode="contained"
-                onPress={() => {
-                  handleBackupPassphraseConfirm();
-                }}
+                onPress={handleBackupPassphraseConfirmPress}
                 disabled={!canSubmitBackupPassphrase}>
                 继续
               </Button>
@@ -580,7 +711,7 @@ export default function MineScreen(): React.JSX.Element {
         </Modal>
         <Modal
           visible={themeDialogVisible}
-          onDismiss={() => setThemeDialogVisible(false)}
+          onDismiss={handleCloseThemeDialogPress}
           contentContainerStyle={styles.themeModalContainer}
           style={{backgroundColor: modalMaskColor}}>
           <View
@@ -614,7 +745,7 @@ export default function MineScreen(): React.JSX.Element {
                 return (
                   <Pressable
                     key={option}
-                    onPress={() => setThemePreference(option)}
+                    onPress={() => handleSetThemePreferencePress(option)}
                     style={[
                       styles.themeOptionCard,
                       {
@@ -653,7 +784,7 @@ export default function MineScreen(): React.JSX.Element {
             </Text>
 
             <View style={styles.themeActions}>
-              <Button onPress={() => setThemeDialogVisible(false)}>关闭</Button>
+              <Button onPress={handleCloseThemeDialogPress}>关闭</Button>
             </View>
           </View>
         </Modal>

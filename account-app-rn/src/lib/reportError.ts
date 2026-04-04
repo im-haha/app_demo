@@ -1,6 +1,6 @@
 import {Sentry} from './sentry';
 
-type ErrorContext = {
+export type ErrorContext = {
   screen?: string;
   action?: string;
   feature?: string;

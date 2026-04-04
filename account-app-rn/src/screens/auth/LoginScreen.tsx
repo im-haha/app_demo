@@ -5,6 +5,8 @@ import {Card, Text} from 'react-native-paper';
 import {ValidationError} from 'yup';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
+import {withErrorCapture} from '@/lib/errorCapture';
+import {reportHandledError} from '@/lib/reportError';
 import {loginSchema} from '@/utils/validate';
 import {useThemeColors} from '@/theme';
 import {AuthStackParamList} from '@/navigation/types';
@@ -60,12 +62,34 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
         setErrors(nextErrors);
       } else {
         const {title, message} = resolveUnlockError(error);
+        if (title === '系统异常') {
+          reportHandledError(error, {
+            screen: 'Login',
+            action: 'submit',
+            feature: 'auth',
+          });
+        }
         Alert.alert(title, message);
       }
     } finally {
       setLoading(false);
     }
   }
+
+  const handleSubmitPress = withErrorCapture(handleSubmit, {
+    screen: 'Login',
+    action: 'pressSubmit',
+    feature: 'auth',
+  });
+
+  const handleNavigateRegisterPress = withErrorCapture(
+    () => navigation.navigate('Register'),
+    {
+      screen: 'Login',
+      action: 'navigateRegister',
+      feature: 'auth',
+    },
+  );
 
   return (
     <KeyboardAvoidingView
@@ -100,10 +124,13 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
               importantForAutofill="no"
               errorText={errors.password}
             />
-            <AppButton onPress={handleSubmit} loading={loading} disabled={loading}>
+            <AppButton onPress={handleSubmitPress} loading={loading} disabled={loading}>
               解锁账本
             </AppButton>
-            <AppButton mode="text" onPress={() => navigation.navigate('Register')} disabled={loading}>
+            <AppButton
+              mode="text"
+              onPress={handleNavigateRegisterPress}
+              disabled={loading}>
               首次使用，创建本地账本
             </AppButton>
           </Card.Content>

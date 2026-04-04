@@ -90,10 +90,10 @@ const LoginActions = React.memo(function LoginActions({
 }: Pick<LoginContentProps, 'loading' | 'onSubmitPress' | 'onNavigateRegisterPress'>): React.JSX.Element {
   return (
     <>
-      <AppButton onPress={onSubmitPress} loading={loading} disabled={loading}>
+      <AppButton size="lg" onPress={onSubmitPress} loading={loading} disabled={loading}>
         解锁账本
       </AppButton>
-      <AppButton mode="text" onPress={onNavigateRegisterPress} disabled={loading}>
+      <AppButton tone="text" size="sm" onPress={onNavigateRegisterPress} disabled={loading}>
         首次使用，创建本地账本
       </AppButton>
     </>

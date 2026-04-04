@@ -5,6 +5,7 @@ import {
   LayoutChangeEvent,
   PanResponder,
   PanResponderGestureState,
+  Pressable,
   StyleSheet,
   View,
 } from 'react-native';
@@ -15,6 +16,8 @@ type DraggableFabProps = {
   rightOffset?: number;
   size?: number;
   backgroundColor?: string;
+  draggable?: boolean;
+  accessibilityLabel?: string;
   children: React.ReactNode;
 };
 
@@ -37,6 +40,8 @@ export default function DraggableFab({
   rightOffset = 20,
   size = 58,
   backgroundColor = '#DE7D58',
+  draggable = true,
+  accessibilityLabel = '新增账单',
   children,
 }: DraggableFabProps): React.JSX.Element {
   const pan = useRef(new Animated.ValueXY({x: 0, y: 0})).current;
@@ -89,13 +94,19 @@ export default function DraggableFab({
   const panResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponder: () => draggable,
+        onMoveShouldSetPanResponder: () => draggable,
         onPanResponderGrant: () => {
+          if (!draggable) {
+            return;
+          }
           dragStartPosRef.current = currentPosRef.current;
           isTapRef.current = true;
         },
         onPanResponderMove: (_event, gestureState) => {
+          if (!draggable) {
+            return;
+          }
           if (
             Math.abs(gestureState.dx) > TAP_MOVE_THRESHOLD ||
             Math.abs(gestureState.dy) > TAP_MOVE_THRESHOLD
@@ -121,6 +132,9 @@ export default function DraggableFab({
           _event: GestureResponderEvent,
           gestureState: PanResponderGestureState,
         ) => {
+          if (!draggable) {
+            return;
+          }
           if (
             isTapRef.current &&
             Math.abs(gestureState.dx) <= TAP_MOVE_THRESHOLD &&
@@ -131,6 +145,9 @@ export default function DraggableFab({
           snapToEdge();
         },
         onPanResponderTerminate: () => {
+          if (!draggable) {
+            return;
+          }
           isTapRef.current = false;
           snapToEdge();
         },
@@ -143,6 +160,7 @@ export default function DraggableFab({
       onPress,
       pan,
       snapToEdge,
+      draggable,
     ],
   );
 
@@ -182,7 +200,7 @@ export default function DraggableFab({
       onLayout={handleContainerLayout}>
       {ready ? (
         <Animated.View
-          {...panResponder.panHandlers}
+          {...(draggable ? panResponder.panHandlers : undefined)}
           style={[
             styles.fab,
             {
@@ -193,7 +211,17 @@ export default function DraggableFab({
               transform: [{translateX: pan.x}, {translateY: pan.y}],
             },
           ]}>
-          {children}
+          {draggable ? (
+            children
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+              onPress={onPress}
+              style={styles.fixedFabHitArea}>
+              {children}
+            </Pressable>
+          )}
         </Animated.View>
       ) : null}
     </View>
@@ -210,5 +238,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 6,
+  },
+  fixedFabHitArea: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

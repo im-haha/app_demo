@@ -5,13 +5,14 @@ import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
-import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {useThemeColors, useThemeTokens} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
 import SwipeableBillRow from '@/components/bill/SwipeableBillRow';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
+import AppButton from '@/components/common/AppButton';
 import {useRecentBills} from '@/store/selectors/billSelectors';
 import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
 import {useMainTabNavigation} from '@/navigation/hooks';
@@ -19,8 +20,7 @@ import {deleteBill} from '@/api/bill';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
-  const resolvedThemeMode = useResolvedThemeMode();
-  const isDark = resolvedThemeMode === 'dark';
+  const tokens = useThemeTokens();
   const navigation = useMainTabNavigation<'Home'>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
@@ -112,7 +112,7 @@ export default function HomeScreen(): React.JSX.Element {
           }}>
           <Card
             mode="contained"
-            style={{backgroundColor: colors.primary, borderRadius: 28}}>
+            style={{backgroundColor: colors.primary, borderRadius: tokens.radius.xl}}>
             <Card.Content style={{gap: 16}}>
               <Text variant="titleMedium" style={{color: '#FFFFFF'}}>
                 本月结余
@@ -150,7 +150,8 @@ export default function HomeScreen(): React.JSX.Element {
               style={{
                 flex: 1,
                 backgroundColor: colors.surface,
-                borderRadius: 24,
+                borderRadius: tokens.radius.xl,
+                ...tokens.shadow.card,
               }}>
               <Card.Content style={{gap: 8}}>
                 <Text variant="bodySmall" style={{color: colors.muted}}>
@@ -168,7 +169,8 @@ export default function HomeScreen(): React.JSX.Element {
               style={{
                 flex: 1,
                 backgroundColor: colors.surface,
-                borderRadius: 24,
+                borderRadius: tokens.radius.xl,
+                ...tokens.shadow.card,
               }}>
               <Card.Content style={{gap: 8}}>
                 <Text variant="bodySmall" style={{color: colors.muted}}>
@@ -185,7 +187,11 @@ export default function HomeScreen(): React.JSX.Element {
 
           <Card
             mode="contained"
-            style={{backgroundColor: colors.surface, borderRadius: 24}}>
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: tokens.radius.xl,
+              ...tokens.shadow.card,
+            }}>
             <Card.Content style={{gap: 12}}>
               <View
                 style={{flexDirection: 'row', justifyContent: 'space-between'}}>
@@ -200,18 +206,15 @@ export default function HomeScreen(): React.JSX.Element {
                 }
                 style={{
                   height: 10,
-                  borderRadius: 999,
+                  borderRadius: tokens.radius.pill,
                   overflow: 'hidden',
-                  backgroundColor:
-                    isDark
-                      ? 'rgba(173,190,184,0.14)'
-                      : 'rgba(26,32,44,0.07)',
+                  backgroundColor: tokens.surface.accent,
                 }}>
                 <Animated.View
                   style={{
                     height: 10,
                     width: budgetFillWidth,
-                    borderRadius: 999,
+                    borderRadius: tokens.radius.pill,
                     backgroundColor: colors.secondary,
                   }}
                 />
@@ -226,12 +229,13 @@ export default function HomeScreen(): React.JSX.Element {
                   {formatCurrency(budget.budgetAmount)}
                 </Text>
               </View>
-              <Text
-                variant="labelLarge"
+              <AppButton
+                tone="secondary"
+                size="sm"
                 onPress={() => navigation.navigate('Budget')}
-                style={{color: colors.primary}}>
+                accessibilityLabel="去设置预算">
                 去设置预算
-              </Text>
+              </AppButton>
             </Card.Content>
           </Card>
 
@@ -239,12 +243,13 @@ export default function HomeScreen(): React.JSX.Element {
             <View
               style={{flexDirection: 'row', justifyContent: 'space-between'}}>
               <Text variant="titleMedium">最近账单</Text>
-              <Text
-                variant="labelLarge"
-                style={{color: colors.primary}}
-                onPress={() => navigation.navigate('Bills')}>
+              <AppButton
+                tone="text"
+                size="sm"
+                onPress={() => navigation.navigate('Bills')}
+                accessibilityLabel="查看全部账单">
                 查看全部
-              </Text>
+              </AppButton>
             </View>
             {bills.length === 0 ? (
               <EmptyState
@@ -296,6 +301,8 @@ export default function HomeScreen(): React.JSX.Element {
         <DraggableFab
           bottomOffset={fabBottom}
           backgroundColor={colors.secondary}
+          draggable={false}
+          accessibilityLabel="新增账单"
           onPress={() => navigation.navigate('BillAdd')}>
           <PlusLineIcon />
         </DraggableFab>

@@ -4,10 +4,11 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Card, List, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import EmptyState from '@/components/common/EmptyState';
+import AppButton from '@/components/common/AppButton';
 import {RootStackParamList} from '@/navigation/types';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
-import {useThemeColors} from '@/theme';
+import {useThemeColors, useThemeTokens} from '@/theme';
 import {formatCurrency} from '@/utils/format';
 import {accountTypeOptions} from '@/utils/constants';
 
@@ -15,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AccountList'>;
 
 export default function AccountListScreen({navigation}: Props): React.JSX.Element {
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
   const currentUserId = useAuthStore(state => state.currentUserId);
   const userAccounts = useAppStore(state =>
     state.accounts
@@ -65,20 +67,20 @@ export default function AccountListScreen({navigation}: Props): React.JSX.Elemen
         </Card>
 
         <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
-          <Pressable
-            onPress={() =>
-              setShowArchived(current => (current === true ? false : true))
-            }
-            hitSlop={8}>
-            <Text variant="labelLarge" style={{color: colors.primary}}>
-              {showArchived ? '隐藏停用账户' : '显示停用账户'}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => navigation.navigate('AccountEdit')} hitSlop={8}>
-            <Text variant="labelLarge" style={{color: colors.primary, fontWeight: '700'}}>
-              + 新增账户
-            </Text>
-          </Pressable>
+          <AppButton
+            tone="text"
+            size="sm"
+            onPress={() => setShowArchived(current => !current)}
+            accessibilityLabel={showArchived ? '隐藏停用账户' : '显示停用账户'}>
+            {showArchived ? '隐藏停用账户' : '显示停用账户'}
+          </AppButton>
+          <AppButton
+            tone="secondary"
+            size="sm"
+            onPress={() => navigation.navigate('AccountEdit')}
+            accessibilityLabel="新增账户">
+            + 新增账户
+          </AppButton>
         </View>
 
         {visibleAccounts.length === 0 ? (
@@ -103,19 +105,36 @@ export default function AccountListScreen({navigation}: Props): React.JSX.Elemen
                         <Text variant="bodySmall" style={{color: colors.muted}}>
                           {account.includeInTotal ? '计入总资产' : '不计入总资产'}
                         </Text>
-                        <Text variant="bodySmall" style={{color: colors.primary}}>
-                          点击看流水
-                        </Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`编辑${account.name}`}
+                          hitSlop={6}
+                          onPress={event => {
+                            event.stopPropagation();
+                            navigation.navigate('AccountEdit', {accountId: account.id});
+                          }}
+                          style={({pressed}) => ({
+                            minHeight: tokens.size.touchMin,
+                            minWidth: tokens.size.touchMin,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            paddingHorizontal: 8,
+                            borderRadius: tokens.radius.md,
+                            backgroundColor: pressed ? tokens.interactive.pressed : 'transparent',
+                          })}>
+                          <Text variant="labelMedium" style={{color: colors.primary, fontWeight: '700'}}>
+                            编辑
+                          </Text>
+                        </Pressable>
                       </View>
                     )}
                     onPress={() => navigation.navigate('AccountLedger', {accountId: account.id})}
-                    onLongPress={() => navigation.navigate('AccountEdit', {accountId: account.id})}
                   />
                 );
               })}
             </Card>
             <Text variant="bodySmall" style={{color: colors.muted}}>
-              长按账户可进入编辑。
+              点击账户查看流水，右侧可直接编辑。
             </Text>
           </View>
         )}

@@ -17,7 +17,7 @@ import {
   FilterSummaryChips,
   TimePresetBar,
 } from '@/components/filters';
-import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors, useThemeTokens} from '@/theme';
 import {filterTypeOptions} from '@/utils/constants';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 import {useBillSections} from '@/store/selectors/billSelectors';
@@ -53,6 +53,7 @@ function parseAmountFilterValue(text: string): number | undefined {
 
 export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
   const navigation = useMainTabNavigation<'Bills'>();
@@ -381,11 +382,11 @@ export default function BillListScreen(): React.JSX.Element {
             </Text>
             <View
               style={{
-                borderRadius: 22,
-                backgroundColor: isDark ? '#2B283A' : '#ECE4FC',
+                borderRadius: tokens.radius.xl,
+                backgroundColor: tokens.surface.accent,
                 borderWidth: 1,
-                borderColor: isDark ? 'rgba(142,148,143,0.26)' : 'rgba(142,148,143,0.18)',
-                height: 56,
+                borderColor: tokens.borderTone.strong,
+                minHeight: tokens.size.controlHeight,
                 flexDirection: 'row',
                 alignItems: 'center',
                 paddingHorizontal: 12,
@@ -412,16 +413,22 @@ export default function BillListScreen(): React.JSX.Element {
               />
               {hasSearchText ? (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="清空搜索关键词"
                   onPress={handleClearSearch}
-                  hitSlop={8}
-                  style={{
+                  hitSlop={6}
+                  style={({pressed}) => ({
                     width: 24,
                     height: 24,
-                    borderRadius: 999,
+                    borderRadius: tokens.radius.pill,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-                  }}>
+                    backgroundColor: pressed
+                      ? tokens.interactive.selected
+                      : isDark
+                        ? 'rgba(255,255,255,0.12)'
+                        : 'rgba(0,0,0,0.12)',
+                  })}>
                   <Text
                     style={{
                       color: isDark ? '#EAF2F0' : '#4A4F52',
@@ -439,17 +446,21 @@ export default function BillListScreen(): React.JSX.Element {
           <View style={{gap: 8}}>
             <Pressable
               onPress={() => setAdvancedVisible(current => !current)}
-              style={{
-                borderRadius: 14,
-                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              accessibilityRole="button"
+              accessibilityLabel={advancedVisible ? '收起更多筛选' : '展开更多筛选'}
+              accessibilityState={{expanded: advancedVisible}}
+              style={({pressed}) => ({
+                minHeight: tokens.size.touchMin,
+                borderRadius: tokens.radius.md,
+                backgroundColor: pressed ? tokens.interactive.pressed : tokens.surface.muted,
                 borderWidth: 1,
-                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                borderColor: tokens.borderTone.strong,
                 paddingHorizontal: 12,
-                paddingVertical: 10,
+                paddingVertical: 9,
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-              }}>
+              })}>
               <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
                 更多筛选
               </Text>
@@ -460,14 +471,30 @@ export default function BillListScreen(): React.JSX.Element {
             {advancedVisible ? (
               <View
                 style={{
-                  borderRadius: 16,
-                  backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                  borderRadius: tokens.radius.lg,
+                  backgroundColor: tokens.surface.muted,
                   borderWidth: 1,
-                  borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                  borderColor: tokens.borderTone.strong,
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   gap: 10,
                 }}>
+                <AccountFilterMenu
+                  accounts={visibleAccounts}
+                  selectedAccountId={selectedAccountId}
+                  onChange={setSelectedAccountId}
+                  containerStyle={{width: '100%'}}
+                  chipStyle={{
+                    minHeight: tokens.size.chipHeight,
+                    borderRadius: tokens.radius.pill,
+                    justifyContent: 'center',
+                    paddingHorizontal: 12,
+                    borderWidth: 1,
+                    borderColor: tokens.borderTone.strong,
+                    backgroundColor: colors.surface,
+                  }}
+                  textStyle={{fontWeight: '600', color: colors.text}}
+                />
                 <AppInput
                   label="商户关键词"
                   placeholder="例如：京东 / 瑞幸 / 滴滴"
@@ -515,25 +542,30 @@ export default function BillListScreen(): React.JSX.Element {
                   <View
                     style={{
                       flexDirection: 'row',
-                      borderRadius: 999,
+                      borderRadius: tokens.radius.pill,
                       padding: 2,
-                      backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
+                      backgroundColor: tokens.surface.accent,
                       alignSelf: 'flex-start',
                     }}>
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="包含转账"
+                      accessibilityState={{selected: includeTransfers}}
                       onPress={() => setIncludeTransfers(true)}
-                      style={{
+                      style={({pressed}) => ({
                         minWidth: 86,
-                        height: 30,
-                        borderRadius: 999,
+                        minHeight: tokens.size.touchMin,
+                        borderRadius: tokens.radius.pill,
                         alignItems: 'center',
                         justifyContent: 'center',
                         backgroundColor: includeTransfers
                           ? isDark
                             ? '#2A3544'
                             : '#DFD2FF'
-                          : 'transparent',
-                      }}>
+                          : pressed
+                            ? tokens.interactive.pressed
+                            : 'transparent',
+                      })}>
                       <Text
                         variant="labelMedium"
                         style={{
@@ -548,19 +580,24 @@ export default function BillListScreen(): React.JSX.Element {
                       </Text>
                     </Pressable>
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="排除转账"
+                      accessibilityState={{selected: !includeTransfers}}
                       onPress={() => setIncludeTransfers(false)}
-                      style={{
+                      style={({pressed}) => ({
                         minWidth: 86,
-                        height: 30,
-                        borderRadius: 999,
+                        minHeight: tokens.size.touchMin,
+                        borderRadius: tokens.radius.pill,
                         alignItems: 'center',
                         justifyContent: 'center',
                         backgroundColor: includeTransfers
-                          ? 'transparent'
+                          ? pressed
+                            ? tokens.interactive.pressed
+                            : 'transparent'
                           : isDark
                             ? '#2A3544'
                             : '#DFD2FF',
-                      }}>
+                      })}>
                       <Text
                         variant="labelMedium"
                         style={{
@@ -576,6 +613,94 @@ export default function BillListScreen(): React.JSX.Element {
                     </Pressable>
                   </View>
                 </View>
+                <View style={{gap: 8}}>
+                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                    转账视角
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      borderRadius: tokens.radius.pill,
+                      padding: 2,
+                      backgroundColor: tokens.surface.accent,
+                      alignSelf: 'flex-start',
+                    }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="默认视角"
+                      accessibilityState={{selected: !isAccountPerspectiveEnabled}}
+                      onPress={() => handleAccountPerspectiveToggle(false)}
+                      style={({pressed}) => ({
+                        minWidth: 72,
+                        minHeight: tokens.size.touchMin,
+                        borderRadius: tokens.radius.pill,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isAccountPerspectiveEnabled
+                          ? pressed
+                            ? tokens.interactive.pressed
+                            : 'transparent'
+                          : isDark
+                            ? '#2A3544'
+                            : '#DFD2FF',
+                      })}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: isAccountPerspectiveEnabled
+                            ? colors.muted
+                            : isDark
+                              ? '#EAF2F0'
+                              : '#213042',
+                        }}>
+                        默认
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="账户视角"
+                      accessibilityState={{
+                        selected: isAccountPerspectiveEnabled,
+                        disabled: !canUseAccountPerspective,
+                      }}
+                      disabled={!canUseAccountPerspective}
+                      onPress={() => handleAccountPerspectiveToggle(true)}
+                      style={({pressed}) => ({
+                        minWidth: 92,
+                        minHeight: tokens.size.touchMin,
+                        borderRadius: tokens.radius.pill,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isAccountPerspectiveEnabled
+                          ? isDark
+                            ? '#2A3544'
+                            : '#DFD2FF'
+                          : pressed
+                            ? tokens.interactive.pressed
+                            : 'transparent',
+                        opacity: canUseAccountPerspective ? 1 : 0.5,
+                      })}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: isAccountPerspectiveEnabled
+                            ? isDark
+                              ? '#EAF2F0'
+                              : '#213042'
+                            : colors.muted,
+                        }}>
+                        账户视角
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <Text variant="bodySmall" style={{color: colors.muted}}>
+                    {canUseAccountPerspective
+                      ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
+                      : '先选择一个账户，再开启账户视角。'}
+                  </Text>
+                </View>
               </View>
             ) : null}
           </View>
@@ -585,15 +710,15 @@ export default function BillListScreen(): React.JSX.Element {
               value={timePreset}
               options={billTimePresetOptions}
               onChange={setTimePreset}
+              containerStyle={{flex: 1}}
               chipStyle={{
-                flex: 1,
-                height: 38,
-                borderRadius: 999,
+                minHeight: tokens.size.chipHeight,
+                borderRadius: tokens.radius.pill,
                 justifyContent: 'center',
                 paddingHorizontal: 12,
                 borderWidth: 1,
-                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
-                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                borderColor: tokens.borderTone.strong,
+                backgroundColor: tokens.surface.muted,
               }}
               textStyle={{fontWeight: '600', color: colors.text}}
             />
@@ -601,31 +726,15 @@ export default function BillListScreen(): React.JSX.Element {
               selectedCategoryId={selectedCategoryId}
               categories={visibleCategories}
               onChange={setSelectedCategoryId}
+              containerStyle={{flex: 1}}
               chipStyle={{
-                flex: 1,
-                height: 38,
-                borderRadius: 999,
+                minHeight: tokens.size.chipHeight,
+                borderRadius: tokens.radius.pill,
                 justifyContent: 'center',
                 paddingHorizontal: 12,
                 borderWidth: 1,
-                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
-                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
-              }}
-              textStyle={{fontWeight: '600', color: colors.text}}
-            />
-            <AccountFilterMenu
-              accounts={visibleAccounts}
-              selectedAccountId={selectedAccountId}
-              onChange={setSelectedAccountId}
-              chipStyle={{
-                flex: 1,
-                height: 38,
-                borderRadius: 999,
-                justifyContent: 'center',
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
-                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                borderColor: tokens.borderTone.strong,
+                backgroundColor: tokens.surface.muted,
               }}
               textStyle={{fontWeight: '600', color: colors.text}}
             />
@@ -644,10 +753,10 @@ export default function BillListScreen(): React.JSX.Element {
             onLayout={event => setFilterSwitchWidth(event.nativeEvent.layout.width)}
             style={{
               height: 56,
-              backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              backgroundColor: tokens.surface.muted,
               borderRadius: 28,
               borderWidth: 1,
-              borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+              borderColor: tokens.borderTone.strong,
               padding: 2,
               flexDirection: 'row',
               overflow: 'hidden',
@@ -678,12 +787,16 @@ export default function BillListScreen(): React.JSX.Element {
             {filterTypeOptions.map(item => (
               <Pressable
                 key={item.value}
-                style={{
+                accessibilityRole="button"
+                accessibilityLabel={`筛选${item.label}`}
+                accessibilityState={{selected: type === item.value}}
+                style={({pressed}) => ({
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
                   zIndex: 1,
-                }}
+                  opacity: pressed ? 0.88 : 1,
+                })}
                 onPress={() => handleTypeChange(item.value)}>
                 <Text
                   variant="titleMedium"
@@ -695,97 +808,6 @@ export default function BillListScreen(): React.JSX.Element {
                 </Text>
               </Pressable>
             ))}
-          </View>
-
-          <View
-            style={{
-              borderRadius: 18,
-              backgroundColor: isDark ? '#111B22' : '#F6F0FF',
-              borderWidth: 1,
-              borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              gap: 8,
-            }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}>
-              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
-                转账视角
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  borderRadius: 999,
-                  padding: 2,
-                  backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
-                }}>
-                <Pressable
-                  onPress={() => handleAccountPerspectiveToggle(false)}
-                  style={{
-                    minWidth: 66,
-                    height: 30,
-                    borderRadius: 999,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isAccountPerspectiveEnabled
-                      ? 'transparent'
-                      : isDark
-                        ? '#2A3544'
-                        : '#DFD2FF',
-                  }}>
-                  <Text
-                    variant="labelMedium"
-                    style={{
-                      fontWeight: '700',
-                      color: isAccountPerspectiveEnabled
-                        ? colors.muted
-                        : isDark
-                          ? '#EAF2F0'
-                          : '#213042',
-                    }}>
-                    默认
-                  </Text>
-                </Pressable>
-                <Pressable
-                  disabled={!canUseAccountPerspective}
-                  onPress={() => handleAccountPerspectiveToggle(true)}
-                  style={{
-                    minWidth: 88,
-                    height: 30,
-                    borderRadius: 999,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: isAccountPerspectiveEnabled
-                      ? isDark
-                        ? '#2A3544'
-                        : '#DFD2FF'
-                      : 'transparent',
-                    opacity: canUseAccountPerspective ? 1 : 0.5,
-                  }}>
-                  <Text
-                    variant="labelMedium"
-                    style={{
-                      fontWeight: '700',
-                      color: isAccountPerspectiveEnabled
-                        ? isDark
-                          ? '#EAF2F0'
-                          : '#213042'
-                        : colors.muted,
-                    }}>
-                    账户视角
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-            <Text variant="bodySmall" style={{color: colors.muted}}>
-              {canUseAccountPerspective
-                ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
-                : '先选择一个账户，再开启账户视角。'}
-            </Text>
           </View>
 
           <FilterSummaryChips
@@ -861,6 +883,8 @@ export default function BillListScreen(): React.JSX.Element {
         <DraggableFab
           bottomOffset={fabBottom}
           backgroundColor={colors.secondary}
+          draggable={false}
+          accessibilityLabel="新增账单"
           onPress={() => navigation.navigate('BillAdd')}>
           <PlusLineIcon />
         </DraggableFab>

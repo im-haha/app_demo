@@ -19,6 +19,7 @@ interface Props {
   autoCapitalize?: RNTextInputProps['autoCapitalize'];
   autoCorrect?: boolean;
   spellCheck?: boolean;
+  nativeStyle?: boolean;
   errorText?: string;
 }
 
@@ -72,10 +73,12 @@ function AppInput({
   autoCapitalize = 'none',
   autoCorrect = false,
   spellCheck,
+  nativeStyle = false,
   errorText,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
   const isPasswordField = Boolean(secureTextEntry);
+  const useNativeStyle = isPasswordField || nativeStyle;
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const resolvedSecureAutoComplete =
     Platform.OS === 'ios' && isPasswordField && autoComplete === 'off'
@@ -97,13 +100,14 @@ function AppInput({
         style={{marginLeft: 12, color: colors.muted, fontWeight: '600'}}>
         {label}
       </Text>
-      {isPasswordField ? (
+      {useNativeStyle ? (
         <View
           style={[
-            styles.passwordInputWrapper,
+            styles.inputWrapper,
             {
               borderColor: colors.border,
               backgroundColor: colors.surface,
+              paddingRight: isPasswordField ? 8 : 16,
             },
           ]}>
           <NativeTextInput
@@ -111,29 +115,34 @@ function AppInput({
             onChangeText={onChangeText}
             placeholder={placeholder}
             placeholderTextColor={colors.muted}
-            secureTextEntry={!isPasswordVisible}
+            secureTextEntry={isPasswordField ? !isPasswordVisible : false}
             keyboardType={keyboardType}
-            autoComplete={resolvedSecureAutoComplete}
-            textContentType={resolvedSecureTextContentType}
+            multiline={multiline}
+            autoComplete={isPasswordField ? resolvedSecureAutoComplete : autoComplete}
+            textContentType={isPasswordField ? resolvedSecureTextContentType : textContentType}
             importantForAutofill={importantForAutofill}
             autoCapitalize={autoCapitalize}
-            autoCorrect={false}
-            spellCheck={false}
+            autoCorrect={isPasswordField ? false : autoCorrect}
+            spellCheck={isPasswordField ? false : spellCheck}
+            textAlignVertical={multiline ? 'top' : 'center'}
             style={[
-              styles.passwordInput,
+              styles.input,
+              multiline ? styles.multilineInput : null,
               {
                 color: colors.text,
               },
             ]}
           />
-          <Pressable
-            accessibilityLabel={isPasswordVisible ? '隐藏口令' : '显示口令'}
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={handlePasswordVisibleToggle}
-            style={styles.passwordToggleButton}>
-            <PasswordEyeIcon color={colors.muted} size={20} hidden={!isPasswordVisible} />
-          </Pressable>
+          {isPasswordField ? (
+            <Pressable
+              accessibilityLabel={isPasswordVisible ? '隐藏口令' : '显示口令'}
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={handlePasswordVisibleToggle}
+              style={styles.passwordToggleButton}>
+              <PasswordEyeIcon color={colors.muted} size={20} hidden={!isPasswordVisible} />
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <PaperTextInput
@@ -168,20 +177,24 @@ function AppInput({
 }
 
 const styles = StyleSheet.create({
-  passwordInputWrapper: {
+  inputWrapper: {
     borderWidth: 1,
     borderRadius: 18,
     minHeight: 56,
     paddingLeft: 16,
-    paddingRight: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  passwordInput: {
+  input: {
     flex: 1,
     fontSize: 16,
     paddingVertical: 12,
     paddingRight: 8,
+  },
+  multilineInput: {
+    minHeight: 88,
+    paddingTop: 12,
+    paddingBottom: 12,
   },
   passwordToggleButton: {
     justifyContent: 'center',

@@ -134,6 +134,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               label="账本昵称"
               value={form.nickname}
               onChangeText={handleNicknameChange}
+              nativeStyle
               autoComplete="off"
               textContentType="nickname"
               errorText={errors.nickname}
@@ -142,6 +143,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               label="账本账号"
               value={form.username}
               onChangeText={handleUsernameChange}
+              nativeStyle
               autoComplete="username"
               textContentType="username"
               errorText={errors.username}

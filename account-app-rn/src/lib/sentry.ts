@@ -26,15 +26,20 @@ function resolveSentryDsn(): string {
 }
 
 const SENTRY_DSN = resolveSentryDsn();
+const SENTRY_RUNTIME_ENABLED = !__DEV__ && Boolean(SENTRY_DSN);
 
 let isSentryInitialized = false;
 
 function getSentryEnabled(): boolean {
-  return !__DEV__ && Boolean(SENTRY_DSN);
+  return SENTRY_RUNTIME_ENABLED;
 }
 
 export function initSentry(): void {
   if (isSentryInitialized) {
+    return;
+  }
+
+  if (!SENTRY_RUNTIME_ENABLED) {
     return;
   }
 
@@ -43,8 +48,8 @@ export function initSentry(): void {
   Sentry.init({
     dsn: SENTRY_DSN || undefined,
     enabled: getSentryEnabled(),
-    debug: __DEV__,
-    environment: __DEV__ ? 'development' : 'production',
+    debug: false,
+    environment: 'production',
     tracesSampleRate: 0,
     sendDefaultPii: false,
     beforeSend(event, hint) {
@@ -70,5 +75,6 @@ export function initSentry(): void {
 }
 
 export {Sentry};
+export {SENTRY_RUNTIME_ENABLED};
 
 initSentry();

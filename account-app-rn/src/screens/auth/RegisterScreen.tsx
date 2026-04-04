@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {Alert, KeyboardAvoidingView, Platform, ScrollView} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Card, Text} from 'react-native-paper';
@@ -44,6 +44,26 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleNicknameChange = useCallback((nickname: string) => {
+    setForm(current => (current.nickname === nickname ? current : {...current, nickname}));
+  }, []);
+
+  const handleUsernameChange = useCallback((username: string) => {
+    setForm(current => (current.username === username ? current : {...current, username}));
+  }, []);
+
+  const handlePasswordChange = useCallback((password: string) => {
+    setForm(current => (current.password === password ? current : {...current, password}));
+  }, []);
+
+  const handleConfirmPasswordChange = useCallback((confirmPassword: string) => {
+    setForm(current =>
+      current.confirmPassword === confirmPassword
+        ? current
+        : {...current, confirmPassword},
+    );
+  }, []);
 
   async function handleSubmit() {
     if (loading) {
@@ -109,7 +129,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="账本昵称"
               value={form.nickname}
-              onChangeText={nickname => setForm(current => ({...current, nickname}))}
+              onChangeText={handleNicknameChange}
               autoComplete="off"
               textContentType="nickname"
               errorText={errors.nickname}
@@ -117,7 +137,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="账本账号"
               value={form.username}
-              onChangeText={username => setForm(current => ({...current, username}))}
+              onChangeText={handleUsernameChange}
               autoComplete="username"
               textContentType="username"
               errorText={errors.username}
@@ -125,7 +145,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="解锁口令"
               value={form.password}
-              onChangeText={password => setForm(current => ({...current, password}))}
+              onChangeText={handlePasswordChange}
               secureTextEntry
               autoComplete="off"
               textContentType="none"
@@ -135,7 +155,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="确认口令"
               value={form.confirmPassword}
-              onChangeText={confirmPassword => setForm(current => ({...current, confirmPassword}))}
+              onChangeText={handleConfirmPasswordChange}
               secureTextEntry
               autoComplete="off"
               textContentType="none"

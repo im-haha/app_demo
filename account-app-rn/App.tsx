@@ -7,7 +7,7 @@ import {Button, Provider as PaperProvider} from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
 import {buildPaperTheme, useResolvedThemeMode} from './src/theme';
 import {useAppStore} from './src/store/appStore';
-import {Sentry} from './src/lib/sentry';
+import {Sentry, SENTRY_RUNTIME_ENABLED} from './src/lib/sentry';
 
 LogBox.ignoreLogs([
   'Support for defaultProps will be removed from function components in a future major release. Use JavaScript default parameters instead.',
@@ -41,7 +41,7 @@ function ErrorFallback({
   );
 }
 
-export default Sentry.wrap(function App() {
+function App(): React.JSX.Element {
   const resolvedThemeMode = useResolvedThemeMode();
   const appTheme = useMemo(
     () => buildPaperTheme(resolvedThemeMode),
@@ -52,19 +52,25 @@ export default Sentry.wrap(function App() {
     <GestureHandlerRootView style={{flex: 1}}>
       <SafeAreaProvider>
         <PaperProvider theme={appTheme}>
-          <Sentry.ErrorBoundary
-            beforeCapture={scope => {
-              scope.setTag('boundary', 'AppErrorBoundary');
-            }}
-            fallback={({resetError}) => <ErrorFallback resetError={resetError} />}
-          >
+          {SENTRY_RUNTIME_ENABLED ? (
+            <Sentry.ErrorBoundary
+              beforeCapture={scope => {
+                scope.setTag('boundary', 'AppErrorBoundary');
+              }}
+              fallback={({resetError}) => <ErrorFallback resetError={resetError} />}
+            >
+              <Bootstrap />
+            </Sentry.ErrorBoundary>
+          ) : (
             <Bootstrap />
-          </Sentry.ErrorBoundary>
+          )}
         </PaperProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
-});
+}
+
+export default SENTRY_RUNTIME_ENABLED ? Sentry.wrap(App) : App;
 
 const styles = StyleSheet.create({
   errorContainer: {

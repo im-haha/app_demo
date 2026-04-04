@@ -1,6 +1,6 @@
-import React, {useRef, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {TextInput, Text} from 'react-native-paper';
-import {Keyboard, View} from 'react-native';
+import {View} from 'react-native';
 import type {TextInputProps as RNTextInputProps} from 'react-native';
 import Svg, {Circle, Path} from 'react-native-svg';
 import {useThemeColors} from '@/theme';
@@ -21,10 +21,6 @@ interface Props {
   spellCheck?: boolean;
   errorText?: string;
 }
-
-type BlurCapableInput = {
-  blur?: () => void;
-};
 
 type PasswordEyeIconProps = {
   size: number;
@@ -77,18 +73,34 @@ function AppInput({
   const colors = useThemeColors();
   const isPasswordField = Boolean(secureTextEntry);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  const inputRef = useRef<BlurCapableInput | null>(null);
-  const blockNextFocusRef = useRef(false);
 
-  function handlePressIn(): void {
-    if (!isFocused) {
-      return;
-    }
-    blockNextFocusRef.current = true;
-    inputRef.current?.blur?.();
-    Keyboard.dismiss();
-  }
+  const handlePasswordVisibleToggle = useCallback(() => {
+    setIsPasswordVisible(current => !current);
+  }, []);
+
+  const renderPasswordIcon = useCallback(
+    ({color = '#6F7A76', size = 20}: {color?: string; size?: number}) => (
+      <PasswordEyeIcon
+        color={color}
+        size={size}
+        hidden={!isPasswordVisible}
+      />
+    ),
+    [isPasswordVisible],
+  );
+
+  const rightIcon = useMemo(
+    () =>
+      isPasswordField ? (
+        <TextInput.Icon
+          icon={renderPasswordIcon}
+          forceTextInputFocus={false}
+          onPress={handlePasswordVisibleToggle}
+          style={{marginRight: 4}}
+        />
+      ) : undefined,
+    [handlePasswordVisibleToggle, isPasswordField, renderPasswordIcon],
+  );
 
   return (
     <View style={{gap: 8, marginTop: 2}}>
@@ -98,49 +110,23 @@ function AppInput({
         {label}
       </Text>
       <TextInput
-        ref={(instance: unknown) => {
-          inputRef.current = instance as unknown as BlurCapableInput | null;
-        }}
-        key={isPasswordField ? `${label}-${isPasswordVisible ? 'visible' : 'hidden'}` : label}
         value={value}
         onChangeText={onChangeText}
-        onPressIn={handlePressIn}
-        onFocus={() => {
-          if (blockNextFocusRef.current) {
-            blockNextFocusRef.current = false;
-            inputRef.current?.blur?.();
-            Keyboard.dismiss();
-            return;
-          }
-          setIsFocused(true);
-        }}
-        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
         secureTextEntry={isPasswordField ? !isPasswordVisible : false}
         keyboardType={keyboardType}
         multiline={multiline}
         autoComplete={isPasswordField ? 'off' : autoComplete}
-        textContentType={isPasswordField ? 'none' : textContentType}
-        importantForAutofill={importantForAutofill}
+        textContentType={isPasswordField ? 'oneTimeCode' : textContentType}
+        importantForAutofill={
+          isPasswordField
+            ? ('noExcludeDescendants' as RNTextInputProps['importantForAutofill'])
+            : importantForAutofill
+        }
         autoCapitalize={autoCapitalize}
         autoCorrect={isPasswordField ? false : autoCorrect}
         spellCheck={isPasswordField ? false : spellCheck}
-        right={
-          isPasswordField ? (
-            <TextInput.Icon
-              icon={({color = '#6F7A76', size = 20}) => (
-                <PasswordEyeIcon
-                  color={color}
-                  size={size}
-                  hidden={!isPasswordVisible}
-                />
-              )}
-              forceTextInputFocus={false}
-              onPress={() => setIsPasswordVisible(current => !current)}
-              style={{marginRight: 4}}
-            />
-          ) : undefined
-        }
+        right={rightIcon}
         mode="outlined"
         outlineStyle={{borderRadius: 18}}
         contentStyle={{

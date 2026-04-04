@@ -1,5 +1,5 @@
-import React, {useState} from 'react';
-import {Alert, KeyboardAvoidingView, Platform, ScrollView, View} from 'react-native';
+import React, {useCallback, useState} from 'react';
+import {Alert, KeyboardAvoidingView, Platform, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Card, Text} from 'react-native-paper';
 import {ValidationError} from 'yup';
@@ -37,6 +37,14 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
   const [form, setForm] = useState<LoginFormState>({username: '', password: ''});
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleUsernameChange = useCallback((username: string) => {
+    setForm(current => (current.username === username ? current : {...current, username}));
+  }, []);
+
+  const handlePasswordChange = useCallback((password: string) => {
+    setForm(current => (current.password === password ? current : {...current, password}));
+  }, []);
 
   async function handleSubmit() {
     if (loading) {
@@ -95,7 +103,7 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{flex: 1, backgroundColor: colors.background}}>
-      <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', padding: 20}}>
+      <View style={{flex: 1, justifyContent: 'center', padding: 20}}>
         <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
           <Card.Content style={{paddingVertical: 20, gap: 22}}>
             <View style={{gap: 8}}>
@@ -109,7 +117,7 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="账本账号"
               value={form.username}
-              onChangeText={username => setForm(current => ({...current, username}))}
+              onChangeText={handleUsernameChange}
               autoComplete="username"
               textContentType="username"
               errorText={errors.username}
@@ -117,7 +125,7 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
             <AppInput
               label="解锁口令"
               value={form.password}
-              onChangeText={password => setForm(current => ({...current, password}))}
+              onChangeText={handlePasswordChange}
               secureTextEntry
               autoComplete="off"
               textContentType="none"
@@ -135,7 +143,7 @@ export default function LoginScreen({navigation}: Props): React.JSX.Element {
             </AppButton>
           </Card.Content>
         </Card>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }

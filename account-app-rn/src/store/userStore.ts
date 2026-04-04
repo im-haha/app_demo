@@ -1,12 +1,12 @@
 import {useMemo} from 'react';
-import {useAppStore} from './appStore';
+import {useAuthStore} from './authStore';
 
 export const useCurrentUser = () => {
-  const users = useAppStore(state => state.users);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const users = useAuthStore(state => state.users);
+  const currentUserId = useAuthStore(state => state.currentUserId);
 
   return useMemo(() => users.find(user => user.id === currentUserId), [users, currentUserId]);
 };
 
 export const useIsAuthenticated = () =>
-  useAppStore(state => Boolean(state.currentUserId && state.token));
+  useAuthStore(state => Boolean(state.currentUserId));

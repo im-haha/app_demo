@@ -1,82 +1,242 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, Pressable, ScrollView, TextInput, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, Animated, Pressable, SectionList, TextInput, View} from 'react-native';
 import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useAppStore} from '@/store/appStore';
 import BillCard from '@/components/bill/BillCard';
+import SwipeableBillRow from '@/components/bill/SwipeableBillRow';
 import EmptyState from '@/components/common/EmptyState';
-import {useResolvedThemeMode, useThemeColors} from '@/theme';
-import {filterTypeOptions} from '@/utils/constants';
+import AppInput from '@/components/common/AppInput';
 import SearchLineIcon from '@/components/common/icons/SearchLineIcon';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
+import {
+  AccountFilterMenu,
+  CategoryFilterMenu,
+  DateRangeFields,
+  FilterSummaryChips,
+  TimePresetBar,
+} from '@/components/filters';
+import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {filterTypeOptions} from '@/utils/constants';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
+import {useBillSections} from '@/store/selectors/billSelectors';
+import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
+import {formatCurrency} from '@/utils/format';
+import {BillFilters, BillListSection} from '@/types/bill';
+import {BillTimePreset, billTimePresetOptions, resolveTimeRange} from '@/utils/timeRange';
+import {useMainTabNavigation} from '@/navigation/hooks';
+import {deleteBill} from '@/api/bill';
+
+function sanitizeAmountFilterInput(input: string): string {
+  const normalized = input.replace(/[^\d.]/g, '');
+  const [integerPart = '', decimalRaw = ''] = normalized.split('.');
+  const decimalPart = decimalRaw.slice(0, 2);
+  if (normalized.includes('.')) {
+    return `${integerPart}.${decimalPart}`;
+  }
+  return integerPart;
+}
+
+function parseAmountFilterValue(text: string): number | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return Number(parsed.toFixed(2));
+}
 
 export default function BillListScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
+  const navigation = useMainTabNavigation<'Bills'>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
   const listBottomPadding = fabBottom + 88;
   const [keywordInput, setKeywordInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [type, setType] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  const [timePreset, setTimePreset] = useState<BillTimePreset>('THIS_MONTH');
+  const [customStartDate, setCustomStartDate] = useState(
+    dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
+  );
+  const [customEndDate, setCustomEndDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
+  const [merchantKeyword, setMerchantKeyword] = useState('');
+  const [tagKeyword, setTagKeyword] = useState('');
+  const [minAmountText, setMinAmountText] = useState('');
+  const [maxAmountText, setMaxAmountText] = useState('');
+  const [includeTransfers, setIncludeTransfers] = useState(true);
+  const [advancedVisible, setAdvancedVisible] = useState(false);
+  const [isAccountPerspectiveEnabled, setIsAccountPerspectiveEnabled] = useState(false);
+  const [activeSwipeRowKey, setActiveSwipeRowKey] = useState<number | null>(null);
   const [filterSwitchWidth, setFilterSwitchWidth] = useState(0);
   const typeIndex = useMemo(
     () => filterTypeOptions.findIndex(item => item.value === type),
     [type],
   );
-  const filterAnim = useRef(new Animated.Value(typeIndex < 0 ? 0 : typeIndex))
-    .current;
-  const storeBills = useAppStore(state => state.bills);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const filterAnim = useRef(new Animated.Value(typeIndex < 0 ? 0 : typeIndex)).current;
   const categories = useAppStore(state => state.categories);
-  const categoryNameMap = useMemo(() => {
-    const map = new Map<number, string>();
+  const accounts = useAppStore(state => state.accounts);
+  const currentUserId = useAuthStore(state => state.currentUserId);
+  const visibleCategories = useMemo(
+    () =>
+      categories
+        .filter(category => category.userId === null || category.userId === currentUserId)
+        .sort((left, right) => left.sortNum - right.sortNum),
+    [categories, currentUserId],
+  );
+  const categoryMap = useMemo(() => {
+    const map = new Map<number, (typeof categories)[number]>();
     categories.forEach(category => {
-      map.set(category.id, category.name);
+      map.set(category.id, category);
     });
     return map;
   }, [categories]);
-  const bills = useMemo(
-    () => {
-      const keywordText = keyword.trim().toLowerCase();
-
-      return (
-      storeBills
-        .filter(bill => bill.userId === currentUserId && !bill.deleted)
-        .filter(bill => (type === 'ALL' ? true : bill.type === type))
-        .filter(bill => {
-          if (!keywordText) {
-            return true;
+  const accountNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    accounts
+      .filter(account => account.userId === currentUserId)
+      .forEach(account => {
+        map.set(account.id, account.name);
+      });
+    return map;
+  }, [accounts, currentUserId]);
+  const visibleAccounts = useMemo(
+    () =>
+      accounts
+        .filter(account => account.userId === currentUserId && !account.isArchived)
+        .sort((left, right) => {
+          if (left.sortNum !== right.sortNum) {
+            return left.sortNum - right.sortNum;
           }
-          const remarkText = (bill.remark ?? '').toLowerCase();
-          const categoryText = (
-            categoryNameMap.get(bill.categoryId) ?? ''
-          ).toLowerCase();
-          return (
-            remarkText.includes(keywordText) ||
-            categoryText.includes(keywordText)
-          );
-        })
-        .sort(
-          (left, right) =>
-            dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
-        )
-      );
-    },
-    [storeBills, currentUserId, type, keyword, categoryNameMap],
+          return left.createdAt.localeCompare(right.createdAt);
+        }),
+    [accounts, currentUserId],
   );
+  const timeRange = useMemo(
+    () => resolveTimeRange(timePreset, customStartDate, customEndDate),
+    [timePreset, customStartDate, customEndDate],
+  );
+  const canUseAccountPerspective = selectedAccountId !== 'ALL';
+  const minAmount = useMemo(
+    () => parseAmountFilterValue(minAmountText),
+    [minAmountText],
+  );
+  const maxAmount = useMemo(
+    () => parseAmountFilterValue(maxAmountText),
+    [maxAmountText],
+  );
+  const billFilters = useMemo<BillFilters>(
+    () => ({
+      type,
+      keyword,
+      categoryId: selectedCategoryId,
+      merchantKeyword: merchantKeyword.trim() || undefined,
+      tagKeyword: tagKeyword.trim() || undefined,
+      minAmount,
+      maxAmount,
+      includeTransfers,
+      accountId:
+        isAccountPerspectiveEnabled || selectedAccountId === 'ALL'
+          ? undefined
+          : selectedAccountId,
+      accountPerspectiveAccountId:
+        isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
+          ? selectedAccountId
+          : undefined,
+      ...(timePreset === 'THIS_MONTH'
+        ? {month: dayjs().format('YYYY-MM')}
+        : {
+            startDate: timeRange.startDate,
+            endDate: timeRange.endDate,
+          }),
+    }),
+    [
+      type,
+      keyword,
+      selectedCategoryId,
+      selectedAccountId,
+      merchantKeyword,
+      tagKeyword,
+      minAmount,
+      maxAmount,
+      includeTransfers,
+      isAccountPerspectiveEnabled,
+      timePreset,
+      timeRange.endDate,
+      timeRange.startDate,
+    ],
+  );
+  const sections = useBillSections(billFilters);
   const indicatorWidth = Math.max((filterSwitchWidth - 4) / 3, 0);
   const indicatorTranslateX = filterAnim.interpolate({
     inputRange: [0, 1, 2],
     outputRange: [2, 2 + indicatorWidth, 2 + indicatorWidth * 2],
   });
   const hasSearchText = keywordInput.trim().length > 0;
+  const selectedCategoryName =
+    selectedCategoryId === null
+      ? '全部分类'
+      : visibleCategories.find(category => category.id === selectedCategoryId)?.name ??
+        '全部分类';
+  const selectedAccountName =
+    selectedAccountId === 'ALL'
+      ? '全部账户'
+      : visibleAccounts.find(account => account.id === selectedAccountId)?.name ??
+        '全部账户';
+  const activeFilterSummary = useMemo(() => {
+    const summaryParts = [timeRange.label];
+    if (selectedCategoryId !== null) {
+      summaryParts.push(selectedCategoryName);
+    }
+    if (selectedAccountId !== 'ALL') {
+      summaryParts.push(selectedAccountName);
+    }
+    if (isAccountPerspectiveEnabled && selectedAccountId !== 'ALL') {
+      summaryParts.push('账户视角: 转入/转出');
+    }
+    if (keyword.trim()) {
+      summaryParts.push(`关键词: ${keyword.trim()}`);
+    }
+    if (merchantKeyword.trim()) {
+      summaryParts.push(`商户: ${merchantKeyword.trim()}`);
+    }
+    if (tagKeyword.trim()) {
+      summaryParts.push(`标签: ${tagKeyword.trim()}`);
+    }
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      summaryParts.push(
+        `金额: ${formatCurrency(minAmount ?? 0)} ~ ${
+          maxAmount !== undefined ? formatCurrency(maxAmount) : '不限'
+        }`,
+      );
+    }
+    if (!includeTransfers) {
+      summaryParts.push('排除转账');
+    }
+    return summaryParts.join(' · ');
+  }, [
+    keyword,
+    merchantKeyword,
+    tagKeyword,
+    minAmount,
+    maxAmount,
+    includeTransfers,
+    selectedAccountName,
+    selectedAccountId,
+    selectedCategoryId,
+    selectedCategoryName,
+    isAccountPerspectiveEnabled,
+    timeRange.label,
+  ]);
 
   useEffect(() => {
     Animated.spring(filterAnim, {
@@ -101,6 +261,12 @@ export default function BillListScreen(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [keywordInput]);
 
+  useEffect(() => {
+    if (!canUseAccountPerspective && isAccountPerspectiveEnabled) {
+      setIsAccountPerspectiveEnabled(false);
+    }
+  }, [canUseAccountPerspective, isAccountPerspectiveEnabled]);
+
   function handleTypeChange(nextType: 'ALL' | 'INCOME' | 'EXPENSE'): void {
     if (nextType === type) {
       return;
@@ -113,6 +279,53 @@ export default function BillListScreen(): React.JSX.Element {
     setKeywordInput('');
     setKeyword('');
   }
+
+  function clearAllFilters(): void {
+    setKeywordInput('');
+    setKeyword('');
+    setType('ALL');
+    setTimePreset('THIS_MONTH');
+    setCustomStartDate(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
+    setCustomEndDate(dayjs().format('YYYY-MM-DD'));
+    setSelectedCategoryId(null);
+    setSelectedAccountId('ALL');
+    setMerchantKeyword('');
+    setTagKeyword('');
+    setMinAmountText('');
+    setMaxAmountText('');
+    setIncludeTransfers(true);
+    setAdvancedVisible(false);
+    setIsAccountPerspectiveEnabled(false);
+  }
+
+  function handleAccountPerspectiveToggle(enabled: boolean): void {
+    if (enabled && !canUseAccountPerspective) {
+      return;
+    }
+    if (enabled === isAccountPerspectiveEnabled) {
+      return;
+    }
+    segmentedSwitchHaptic();
+    setIsAccountPerspectiveEnabled(enabled);
+  }
+
+  const handleDeleteBill = useCallback((billId: number) => {
+    Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteBill(billId);
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
+          }
+        },
+      },
+    ]);
+  }, []);
 
   function getFilterTextColor(itemType: 'ALL' | 'INCOME' | 'EXPENSE'): string {
     if (type !== itemType) {
@@ -127,6 +340,31 @@ export default function BillListScreen(): React.JSX.Element {
     return isDark ? '#EAF2F0' : '#1F4346';
   }
 
+  function renderSectionHeader({
+    section,
+  }: {
+    section: BillListSection;
+  }): React.JSX.Element {
+    return (
+      <View
+        style={{
+          marginTop: 4,
+          marginBottom: 8,
+          paddingHorizontal: 4,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+        <Text variant="titleSmall" style={{fontWeight: '700', color: colors.text}}>
+          {section.title}
+        </Text>
+        <Text variant="bodySmall" style={{color: colors.muted}}>
+          收 {formatCurrency(section.dayIncome)} / 支 {formatCurrency(section.dayExpense)}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
       <View style={{flex: 1}}>
@@ -135,7 +373,7 @@ export default function BillListScreen(): React.JSX.Element {
             paddingHorizontal: 20,
             paddingTop: 12,
             paddingBottom: 10,
-            gap: 12,
+            gap: 10,
           }}>
           <View style={{gap: 8}}>
             <Text variant="headlineSmall" style={{fontWeight: '800'}}>
@@ -146,9 +384,7 @@ export default function BillListScreen(): React.JSX.Element {
                 borderRadius: 22,
                 backgroundColor: isDark ? '#2B283A' : '#ECE4FC',
                 borderWidth: 1,
-                borderColor: isDark
-                  ? 'rgba(142,148,143,0.26)'
-                  : 'rgba(142,148,143,0.18)',
+                borderColor: isDark ? 'rgba(142,148,143,0.26)' : 'rgba(142,148,143,0.18)',
                 height: 56,
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -158,7 +394,7 @@ export default function BillListScreen(): React.JSX.Element {
               <TextInput
                 value={keywordInput}
                 onChangeText={setKeywordInput}
-                placeholder="搜索备注关键字"
+                placeholder="搜索备注/分类/商户/标签/金额/账户/日期"
                 placeholderTextColor={isDark ? '#95A4AA' : '#7A837D'}
                 style={{
                   flex: 1,
@@ -184,9 +420,7 @@ export default function BillListScreen(): React.JSX.Element {
                     borderRadius: 999,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.12)'
-                      : 'rgba(0,0,0,0.12)',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
                   }}>
                   <Text
                     style={{
@@ -201,18 +435,219 @@ export default function BillListScreen(): React.JSX.Element {
               ) : null}
             </View>
           </View>
+
+          <View style={{gap: 8}}>
+            <Pressable
+              onPress={() => setAdvancedVisible(current => !current)}
+              style={{
+                borderRadius: 14,
+                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                更多筛选
+              </Text>
+              <Text variant="labelMedium" style={{color: colors.muted}}>
+                {advancedVisible ? '收起' : '展开'}
+              </Text>
+            </Pressable>
+            {advancedVisible ? (
+              <View
+                style={{
+                  borderRadius: 16,
+                  backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  gap: 10,
+                }}>
+                <AppInput
+                  label="商户关键词"
+                  placeholder="例如：京东 / 瑞幸 / 滴滴"
+                  value={merchantKeyword}
+                  onChangeText={setMerchantKeyword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <AppInput
+                  label="标签关键词"
+                  placeholder="例如：报销 / 通勤 / 工作餐"
+                  value={tagKeyword}
+                  onChangeText={setTagKeyword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={{flexDirection: 'row', gap: 8}}>
+                  <View style={{flex: 1}}>
+                    <AppInput
+                      label="最低金额"
+                      placeholder="0"
+                      value={minAmountText}
+                      onChangeText={value =>
+                        setMinAmountText(sanitizeAmountFilterInput(value))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <View style={{flex: 1}}>
+                    <AppInput
+                      label="最高金额"
+                      placeholder="不限"
+                      value={maxAmountText}
+                      onChangeText={value =>
+                        setMaxAmountText(sanitizeAmountFilterInput(value))
+                      }
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                </View>
+                <View style={{gap: 8}}>
+                  <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                    转账口径
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      borderRadius: 999,
+                      padding: 2,
+                      backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
+                      alignSelf: 'flex-start',
+                    }}>
+                    <Pressable
+                      onPress={() => setIncludeTransfers(true)}
+                      style={{
+                        minWidth: 86,
+                        height: 30,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: includeTransfers
+                          ? isDark
+                            ? '#2A3544'
+                            : '#DFD2FF'
+                          : 'transparent',
+                      }}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: includeTransfers
+                            ? isDark
+                              ? '#EAF2F0'
+                              : '#213042'
+                            : colors.muted,
+                        }}>
+                        包含转账
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setIncludeTransfers(false)}
+                      style={{
+                        minWidth: 86,
+                        height: 30,
+                        borderRadius: 999,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: includeTransfers
+                          ? 'transparent'
+                          : isDark
+                            ? '#2A3544'
+                            : '#DFD2FF',
+                      }}>
+                      <Text
+                        variant="labelMedium"
+                        style={{
+                          fontWeight: '700',
+                          color: includeTransfers
+                            ? colors.muted
+                            : isDark
+                              ? '#EAF2F0'
+                              : '#213042',
+                        }}>
+                        排除转账
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={{flexDirection: 'row', gap: 8}}>
+            <TimePresetBar<BillTimePreset>
+              value={timePreset}
+              options={billTimePresetOptions}
+              onChange={setTimePreset}
+              chipStyle={{
+                flex: 1,
+                height: 38,
+                borderRadius: 999,
+                justifyContent: 'center',
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              }}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+            <CategoryFilterMenu
+              selectedCategoryId={selectedCategoryId}
+              categories={visibleCategories}
+              onChange={setSelectedCategoryId}
+              chipStyle={{
+                flex: 1,
+                height: 38,
+                borderRadius: 999,
+                justifyContent: 'center',
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              }}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+            <AccountFilterMenu
+              accounts={visibleAccounts}
+              selectedAccountId={selectedAccountId}
+              onChange={setSelectedAccountId}
+              chipStyle={{
+                flex: 1,
+                height: 38,
+                borderRadius: 999,
+                justifyContent: 'center',
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+                backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              }}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+          </View>
+
+          {timePreset === 'CUSTOM' ? (
+            <DateRangeFields
+              startDate={customStartDate}
+              endDate={customEndDate}
+              onStartDateChange={setCustomStartDate}
+              onEndDateChange={setCustomEndDate}
+            />
+          ) : null}
+
           <View
-            onLayout={event =>
-              setFilterSwitchWidth(event.nativeEvent.layout.width)
-            }
+            onLayout={event => setFilterSwitchWidth(event.nativeEvent.layout.width)}
             style={{
               height: 56,
               backgroundColor: isDark ? '#111B22' : '#F6F0FF',
               borderRadius: 28,
               borderWidth: 1,
-              borderColor: isDark
-                ? 'rgba(142,148,143,0.28)'
-                : 'rgba(142,148,143,0.2)',
+              borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
               padding: 2,
               flexDirection: 'row',
               overflow: 'hidden',
@@ -261,34 +696,168 @@ export default function BillListScreen(): React.JSX.Element {
               </Pressable>
             ))}
           </View>
+
+          <View
+            style={{
+              borderRadius: 18,
+              backgroundColor: isDark ? '#111B22' : '#F6F0FF',
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(142,148,143,0.28)' : 'rgba(142,148,143,0.2)',
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              gap: 8,
+            }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                转账视角
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  borderRadius: 999,
+                  padding: 2,
+                  backgroundColor: isDark ? '#1A2731' : '#ECE4FC',
+                }}>
+                <Pressable
+                  onPress={() => handleAccountPerspectiveToggle(false)}
+                  style={{
+                    minWidth: 66,
+                    height: 30,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isAccountPerspectiveEnabled
+                      ? 'transparent'
+                      : isDark
+                        ? '#2A3544'
+                        : '#DFD2FF',
+                  }}>
+                  <Text
+                    variant="labelMedium"
+                    style={{
+                      fontWeight: '700',
+                      color: isAccountPerspectiveEnabled
+                        ? colors.muted
+                        : isDark
+                          ? '#EAF2F0'
+                          : '#213042',
+                    }}>
+                    默认
+                  </Text>
+                </Pressable>
+                <Pressable
+                  disabled={!canUseAccountPerspective}
+                  onPress={() => handleAccountPerspectiveToggle(true)}
+                  style={{
+                    minWidth: 88,
+                    height: 30,
+                    borderRadius: 999,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isAccountPerspectiveEnabled
+                      ? isDark
+                        ? '#2A3544'
+                        : '#DFD2FF'
+                      : 'transparent',
+                    opacity: canUseAccountPerspective ? 1 : 0.5,
+                  }}>
+                  <Text
+                    variant="labelMedium"
+                    style={{
+                      fontWeight: '700',
+                      color: isAccountPerspectiveEnabled
+                        ? isDark
+                          ? '#EAF2F0'
+                          : '#213042'
+                        : colors.muted,
+                    }}>
+                    账户视角
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              {canUseAccountPerspective
+                ? '开启后，转账会按当前账户显示为转入(收入)/转出(支出)。'
+                : '先选择一个账户，再开启账户视角。'}
+            </Text>
+          </View>
+
+          <FilterSummaryChips
+            summaryText={activeFilterSummary}
+            onClear={clearAllFilters}
+            summaryTextStyle={{color: colors.muted}}
+            clearTextStyle={{color: colors.primary}}
+            containerStyle={{paddingHorizontal: 2}}
+          />
         </View>
-        <ScrollView
-          bounces={false}
+        <SectionList
+          sections={sections}
+          onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
+          keyExtractor={item => String(item.id)}
+          renderSectionHeader={renderSectionHeader}
+          renderItem={({item}) => (
+            <View style={{marginBottom: 10}}>
+              <SwipeableBillRow
+                rowKey={item.id}
+                activeRowKey={activeSwipeRowKey}
+                onRowOpen={setActiveSwipeRowKey}
+                onRowClose={rowKey =>
+                  setActiveSwipeRowKey(current =>
+                    current === rowKey ? null : current,
+                  )
+                }
+                onPress={() =>
+                  navigation.navigate('BillDetail', {
+                    billId: item.id,
+                  })
+                }
+                onEdit={() =>
+                  navigation.navigate('BillEdit', {
+                    billId: item.id,
+                  })
+                }
+                onDelete={() => handleDeleteBill(item.id)}>
+                <BillCard
+                  bill={item}
+                  category={categoryMap.get(item.categoryId)}
+                  sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+                  transferTargetAccountName={
+                    item.transferTargetAccountId
+                      ? accountNameMap.get(item.transferTargetAccountId)
+                      : undefined
+                  }
+                  accountPerspectiveAccountId={
+                    isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
+                      ? selectedAccountId
+                      : undefined
+                  }
+                />
+              </SwipeableBillRow>
+            </View>
+          )}
+          stickySectionHeadersEnabled={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: listBottomPadding,
             paddingTop: 8,
-            gap: 12,
-          }}>
-          {bills.length === 0 ? (
-            <EmptyState
-              title="还没有账单"
-              description="先记第一笔，后面统计和预算才有意义。"
-              icon="wallet-outline"
-            />
-          ) : (
-            bills.map(bill => (
-              <BillCard
-                key={bill.id}
-                bill={bill}
-                category={categories.find(item => item.id === bill.categoryId)}
-                onPress={() =>
-                  navigation.navigate('BillDetail', {billId: bill.id})
-                }
+            flexGrow: 1,
+          }}
+          ListEmptyComponent={
+            <View style={{paddingTop: 36}}>
+              <EmptyState
+                title="没有匹配账单"
+                description="调整筛选条件后再试试。"
+                icon="wallet-outline"
               />
-            ))
-          )}
-        </ScrollView>
+            </View>
+          }
+        />
         <DraggableFab
           bottomOffset={fabBottom}
           backgroundColor={colors.secondary}

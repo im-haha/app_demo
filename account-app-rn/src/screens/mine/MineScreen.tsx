@@ -1,12 +1,20 @@
 import React, {useMemo, useState} from 'react';
-import {Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import {Alert, Image, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import {Button, Card, List, Modal, Portal, Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
+import AppInput from '@/components/common/AppInput';
 import {useThemeColors, useResolvedThemeMode} from '@/theme';
 import {useThemeStore} from '@/store/themeStore';
 import {ThemePreference} from '@/types/theme';
+import {useMainTabNavigation} from '@/navigation/hooks';
+import {exportMyData, importMyData} from '@/api/data';
+import {AppDataExportPayload} from '@/services/localAppService';
+import {
+  exportBackupByShare,
+  pickBackupPayloadFromFile,
+  writeBackupPayloadToFile,
+} from '@/services/fileBackupService';
 
 const DEFAULT_AVATAR = require('../../assets/images/avatar-default.jpeg');
 const THEME_OPTIONS: ThemePreference[] = ['SYSTEM', 'LIGHT', 'DARK'];
@@ -20,6 +28,49 @@ const THEME_DESC_MAP: Record<ThemePreference, string> = {
   LIGHT: '保持当前清爽浅色风格',
   DARK: '低亮度护眼，夜间更舒适',
 };
+type BackupPhase = 'idle' | 'picking' | 'confirming' | 'importing' | 'exporting';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '请稍后重试';
+}
+
+function resolveImportFailure(error: unknown): {title: string; message: string} {
+  const rawMessage = getErrorMessage(error);
+  if (rawMessage.startsWith('AUTO_BACKUP_FAILED::')) {
+    return {
+      title: '自动备份失败',
+      message: rawMessage.replace('AUTO_BACKUP_FAILED::', ''),
+    };
+  }
+  if (rawMessage.startsWith('IMPORT_APPLY_FAILED::')) {
+    return {
+      title: '导入应用失败',
+      message: rawMessage.replace('IMPORT_APPLY_FAILED::', ''),
+    };
+  }
+  if (rawMessage.includes('暂不支持')) {
+    return {
+      title: '版本不兼容',
+      message: rawMessage,
+    };
+  }
+  if (
+    rawMessage.includes('校验失败') ||
+    rawMessage.includes('损坏') ||
+    rawMessage.includes('格式不正确') ||
+    rawMessage.includes('JSON') ||
+    rawMessage.includes('Unexpected token')
+  ) {
+    return {
+      title: '备份文件损坏',
+      message: rawMessage,
+    };
+  }
+  return {
+    title: '导入失败',
+    message: rawMessage,
+  };
+}
 
 function hexToRgba(hex: string, alpha: number): string {
   const normalized = hex.replace('#', '');
@@ -42,17 +93,39 @@ export default function MineScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
-  const users = useAppStore(state => state.users);
-  const currentUserId = useAppStore(state => state.currentUserId);
-  const logout = useAppStore(state => state.logout);
+  const navigation = useMainTabNavigation<'Mine'>();
+  const users = useAuthStore(state => state.users);
+  const currentUserId = useAuthStore(state => state.currentUserId);
+  const logout = useAuthStore(state => state.logout);
   const themePreference = useThemeStore(state => state.preference);
   const setThemePreference = useThemeStore(state => state.setPreference);
   const [themeDialogVisible, setThemeDialogVisible] = useState(false);
+  const [backupPassphraseModalVisible, setBackupPassphraseModalVisible] = useState(false);
+  const [backupPassphraseAction, setBackupPassphraseAction] = useState<'IMPORT' | 'EXPORT' | null>(
+    null,
+  );
+  const [backupPassphrase, setBackupPassphrase] = useState('');
+  const [backupPhase, setBackupPhase] = useState<BackupPhase>('idle');
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const isBackupBusy = backupPhase !== 'idle';
+  const backupMenuDescription = useMemo(() => {
+    if (backupPhase === 'picking') {
+      return '正在选择备份文件...';
+    }
+    if (backupPhase === 'confirming') {
+      return '请确认是否覆盖当前账本';
+    }
+    if (backupPhase === 'importing') {
+      return '正在导入并校验备份...';
+    }
+    if (backupPhase === 'exporting') {
+      return '正在加密并导出备份...';
+    }
+    return '导出备份文件或选择文件导入';
+  }, [backupPhase]);
   const currentThemeLabel = THEME_LABEL_MAP[themePreference];
   const activeThemeLabel = resolvedThemeMode === 'dark' ? '深色' : '浅色';
   const modalMaskColor = isDark
@@ -60,6 +133,161 @@ export default function MineScreen(): React.JSX.Element {
     : 'rgba(24, 34, 33, 0.38)';
   const modalCardColor = isDark ? '#0F1C22' : '#FFF9F1';
   const modalCardBorder = isDark ? '#2E4A53' : '#D9CCB8';
+  const canSubmitBackupPassphrase = backupPassphrase.trim().length >= 6;
+
+  function openBackupPassphraseModal(action: 'IMPORT' | 'EXPORT'): void {
+    if (isBackupBusy) {
+      return;
+    }
+    setBackupPassphrase('');
+    setBackupPassphraseAction(action);
+    setBackupPassphraseModalVisible(true);
+  }
+
+  function closeBackupPassphraseModal(): void {
+    setBackupPassphraseModalVisible(false);
+    setBackupPassphraseAction(null);
+    setBackupPassphrase('');
+  }
+
+  function resolveBackupPassphrase(): string | null {
+    const normalized = backupPassphrase.trim();
+    if (normalized.length < 6) {
+      Alert.alert('口令过短', '备份口令至少 6 位，请重新输入');
+      return null;
+    }
+    return normalized;
+  }
+
+  async function handleBackupPassphraseConfirm(): Promise<void> {
+    const action = backupPassphraseAction;
+    const passphrase = resolveBackupPassphrase();
+    if (!action || !passphrase) {
+      return;
+    }
+
+    closeBackupPassphraseModal();
+    if (action === 'EXPORT') {
+      await handleExportBackupFile(passphrase);
+      return;
+    }
+    await handleImportBackupFile(passphrase);
+  }
+
+  async function handleExportBackupFile(passphrase: string): Promise<void> {
+    if (isBackupBusy) {
+      return;
+    }
+    try {
+      setBackupPhase('exporting');
+      const response = await exportMyData();
+      const fileInfo = await exportBackupByShare(response.data, {
+        encryptionSecret: passphrase,
+      });
+      Alert.alert('导出成功', `备份文件已生成：${fileInfo.fileName}`);
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      Alert.alert('导出失败', message);
+    } finally {
+      setBackupPhase('idle');
+    }
+  }
+
+  async function handleImportBackupFile(passphrase: string): Promise<void> {
+    if (isBackupBusy) {
+      return;
+    }
+    try {
+      setBackupPhase('picking');
+      const pickedFile = await pickBackupPayloadFromFile({
+        encryptionSecret: passphrase,
+      });
+      if (!pickedFile) {
+        setBackupPhase('idle');
+        return;
+      }
+
+      const importedAtText = pickedFile.payload.exportedAt
+        ? `导出时间：${pickedFile.payload.exportedAt}\n`
+        : '';
+      setBackupPhase('confirming');
+      let shouldResetToIdleOnDismiss = true;
+
+      Alert.alert(
+        '确认导入备份',
+        `${importedAtText}文件：${pickedFile.fileName}\n导入会覆盖当前账户账本数据，是否继续？`,
+        [
+          {
+            text: '取消',
+            style: 'cancel',
+            onPress: () => setBackupPhase('idle'),
+          },
+          {
+            text: '继续导入',
+            style: 'destructive',
+            onPress: () => {
+              shouldResetToIdleOnDismiss = false;
+              confirmImportBackup(pickedFile.payload, pickedFile.fileName, passphrase);
+            },
+          },
+        ],
+        {
+          onDismiss: () => {
+            if (shouldResetToIdleOnDismiss) {
+              setBackupPhase('idle');
+            }
+          },
+        },
+      );
+    } catch (error: unknown) {
+      setBackupPhase('idle');
+      const {title, message} = resolveImportFailure(error);
+      Alert.alert(title, message);
+    }
+  }
+
+  async function confirmImportBackup(
+    payload: AppDataExportPayload,
+    sourceFileName: string,
+    passphrase: string,
+  ): Promise<void> {
+    try {
+      setBackupPhase('importing');
+      const currentPayload = await exportMyData();
+      let autoBackupName = '';
+      try {
+        const autoBackup = await writeBackupPayloadToFile(currentPayload.data, {
+          prefix: 'auto-backup-before-import',
+          encryptionSecret: passphrase,
+        });
+        autoBackupName = autoBackup.fileName;
+      } catch (error: unknown) {
+        throw new Error(`AUTO_BACKUP_FAILED::${getErrorMessage(error)}`);
+      }
+      try {
+        await importMyData(payload);
+      } catch (error: unknown) {
+        throw new Error(`IMPORT_APPLY_FAILED::${getErrorMessage(error)}`);
+      }
+
+      const importSummary = [
+        `账户 ${payload.accounts.length} 个`,
+        `分类 ${payload.categories.length} 个`,
+        `账单 ${payload.bills.length} 笔`,
+        `预算 ${payload.budgets.length} 条`,
+      ].join('，');
+
+      Alert.alert(
+        '导入成功',
+        `已从 ${sourceFileName} 导入数据。\n导入摘要：${importSummary}\n导入前自动备份：${autoBackupName}`,
+      );
+    } catch (error: unknown) {
+      const {title, message} = resolveImportFailure(error);
+      Alert.alert(title, message);
+    } finally {
+      setBackupPhase('idle');
+    }
+  }
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -152,6 +380,23 @@ export default function MineScreen(): React.JSX.Element {
             onPress={() => navigation.navigate('Budget')}
           />
           <List.Item
+            title="账户管理"
+            description="管理具体账户、余额与停用状态"
+            left={() => (
+              <View
+                style={[
+                  styles.menuIcon,
+                  {
+                    borderColor: isDark ? '#42513D' : '#D5E3CE',
+                    backgroundColor: isDark ? '#273223' : '#EEF6EA',
+                  },
+                ]}>
+                <Text style={{color: colors.primary, fontWeight: '700'}}>¥</Text>
+              </View>
+            )}
+            onPress={() => navigation.navigate('AccountList')}
+          />
+          <List.Item
             title="分类管理"
             description="新增、编辑和删除分类"
             left={() => (
@@ -190,6 +435,41 @@ export default function MineScreen(): React.JSX.Element {
               </View>
             )}
             onPress={() => navigation.navigate('CategoryManage')}
+          />
+          <List.Item
+            title="数据备份"
+            description={backupMenuDescription}
+            left={() => (
+              <View
+                style={[
+                  styles.menuIcon,
+                  {
+                    borderColor: isDark ? '#47616A' : '#CFE0E4',
+                    backgroundColor: isDark ? '#22363D' : '#EEF6F8',
+                  },
+                ]}>
+                <Text style={{color: colors.primary, fontWeight: '700'}}>↕</Text>
+              </View>
+            )}
+            onPress={() =>
+              isBackupBusy
+                ? undefined
+                : Alert.alert('数据备份', '选择需要的操作', [
+                    {text: '取消', style: 'cancel'},
+                    {
+                      text: '导入',
+                      onPress: () => {
+                        openBackupPassphraseModal('IMPORT');
+                      },
+                    },
+                    {
+                      text: '导出',
+                      onPress: () => {
+                        openBackupPassphraseModal('EXPORT');
+                      },
+                    },
+                  ])
+            }
           />
           <List.Item
             title="关于"
@@ -256,6 +536,48 @@ export default function MineScreen(): React.JSX.Element {
         </Card>
       </ScrollView>
       <Portal>
+        <Modal
+          visible={backupPassphraseModalVisible}
+          onDismiss={closeBackupPassphraseModal}
+          contentContainerStyle={styles.passphraseModalContainer}
+          style={{backgroundColor: modalMaskColor}}>
+          <View
+            style={[
+              styles.passphraseModalCard,
+              {
+                backgroundColor: modalCardColor,
+                borderColor: modalCardBorder,
+              },
+            ]}>
+            <Text variant="titleMedium" style={{fontWeight: '800', color: colors.text}}>
+              {backupPassphraseAction === 'EXPORT' ? '输入备份口令' : '输入导入口令'}
+            </Text>
+            <Text variant="bodySmall" style={{color: colors.muted}}>
+              口令需手动保存，导入时必须与导出时一致。
+            </Text>
+            <AppInput
+              label="备份口令"
+              value={backupPassphrase}
+              onChangeText={setBackupPassphrase}
+              secureTextEntry
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
+              placeholder="至少 6 位"
+            />
+            <View style={styles.passphraseActions}>
+              <Button onPress={closeBackupPassphraseModal}>取消</Button>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  handleBackupPassphraseConfirm();
+                }}
+                disabled={!canSubmitBackupPassphrase}>
+                继续
+              </Button>
+            </View>
+          </View>
+        </Modal>
         <Modal
           visible={themeDialogVisible}
           onDismiss={() => setThemeDialogVisible(false)}
@@ -447,5 +769,24 @@ const styles = StyleSheet.create({
   },
   themeActions: {
     alignItems: 'flex-end',
+  },
+  passphraseModalContainer: {
+    paddingHorizontal: 24,
+  },
+  passphraseModalCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: {width: 0, height: 8},
+    elevation: 8,
+  },
+  passphraseActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
 });

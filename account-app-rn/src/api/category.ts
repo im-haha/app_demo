@@ -1,4 +1,5 @@
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {ApiResponse} from '@/types/api';
 import {BillType, Category} from '@/types/bill';
 
@@ -28,4 +29,33 @@ export async function updateCategory(
 export async function deleteCategory(categoryId: number): Promise<ApiResponse<null>> {
   useAppStore.getState().removeCategory(categoryId);
   return {code: 200, message: 'success', data: null};
+}
+
+export async function replaceCategoryAndDelete(
+  fromCategoryId: number,
+  toCategoryId: number,
+): Promise<ApiResponse<null>> {
+  useAppStore.getState().replaceCategoryAndRemove(fromCategoryId, toCategoryId);
+  return {code: 200, message: 'success', data: null};
+}
+
+export async function checkCategoryNameDuplicated(
+  type: BillType,
+  name: string,
+  excludeCategoryId?: number,
+): Promise<ApiResponse<boolean>> {
+  const state = useAppStore.getState();
+  const currentUserId = useAuthStore.getState().currentUserId;
+  const normalizedName = name.trim().toLowerCase();
+  const duplicated = state.categories.some(category => {
+    if (category.userId !== currentUserId || category.type !== type) {
+      return false;
+    }
+    if (excludeCategoryId && category.id === excludeCategoryId) {
+      return false;
+    }
+    return category.name.trim().toLowerCase() === normalizedName;
+  });
+
+  return {code: 200, message: 'success', data: duplicated};
 }

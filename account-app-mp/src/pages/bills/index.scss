@@ -1,0 +1,85 @@
+.bills-toolbar {
+  background: #fffdf8;
+  border-radius: 20px;
+  padding: 16px;
+  box-sizing: border-box;
+  margin-bottom: 14px;
+}
+
+.bills-filter-row {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 14px;
+}
+
+.bills-filter-btn {
+  flex: 1;
+  margin: 0;
+  height: 78px;
+  line-height: 78px;
+  padding: 0;
+  font-size: 30px;
+  box-sizing: border-box;
+}
+
+.bills-filter-btn + .bills-filter-btn {
+  margin-left: 10px;
+}
+
+.bills-form-row {
+  margin-bottom: 10px;
+}
+
+.bills-form-row text {
+  display: block;
+  font-size: 24px;
+  line-height: 1.4;
+}
+
+.bills-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  background: #f7f2e7;
+  border-radius: 14px;
+  padding: 0 14px;
+  height: 74px;
+  line-height: 74px;
+  font-size: 28px;
+  box-sizing: border-box;
+}
+
+.bills-submit {
+  margin-top: 8px;
+  height: 84px;
+  line-height: 84px;
+  font-size: 32px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.bills-item {
+  background: #fffdf8;
+  border-radius: 18px;
+  padding: 14px;
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+
+.bills-item-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bills-item-note {
+  margin-top: 6px;
+}
+
+.bills-item-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+}

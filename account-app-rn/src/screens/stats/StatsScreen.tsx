@@ -1,165 +1,141 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, Easing, Pressable, ScrollView, View} from 'react-native';
+import {Animated, Easing, Pressable, ScrollView, StyleSheet, View} from 'react-native';
 import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
-import PieChartCard from '@/components/stats/PieChartCard';
-import TrendChartCard from '@/components/stats/TrendChartCard';
+import {useAuthStore} from '@/store/authStore';
+import CashflowTrendCard from '@/components/stats/CashflowTrendCard';
+import CashflowTrendXLCard from '@/components/stats/xl/CashflowTrendXLCard';
+import CategoryDonutCard from '@/components/stats/CategoryDonutCard';
+import CompareBarCard from '@/components/stats/CompareBarCard';
+import StatsSummaryStrip from '@/components/stats/StatsSummaryStrip';
+import {
+  AccountFilterMenu,
+  CategoryFilterMenu,
+  DateRangeFields,
+  FilterSummaryChips,
+  TimePresetBar,
+} from '@/components/filters';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
+import {CommonTimePreset, resolveTimeRange, statsTimePresetOptions} from '@/utils/timeRange';
+
+type StatsType = 'INCOME' | 'EXPENSE';
 
 export default function StatsScreen(): React.JSX.Element {
+  const useXLChart = true;
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const [type, setType] = useState<'INCOME' | 'EXPENSE'>('EXPENSE');
-  const [rangeDays, setRangeDays] = useState<7 | 30>(7);
+  const chartTheme = getStatsChartTheme(resolvedThemeMode);
+  const [type, setType] = useState<StatsType>('EXPENSE');
+  const [timePreset, setTimePreset] = useState<CommonTimePreset>('THIS_MONTH');
+  const [customStartDate, setCustomStartDate] = useState(
+    dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
+  );
+  const [customEndDate, setCustomEndDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
+  const [includeTransfers, setIncludeTransfers] = useState(false);
   const [switchWidth, setSwitchWidth] = useState(0);
-  const [rangeSwitchWidth, setRangeSwitchWidth] = useState(0);
   const typeSwitchAnim = useRef(
     new Animated.Value(type === 'EXPENSE' ? 0 : 1),
   ).current;
-  const rangeSwitchAnim = useRef(
-    new Animated.Value(rangeDays === 7 ? 0 : 1),
-  ).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslateY = useRef(new Animated.Value(0)).current;
-  const month = dayjs().format('YYYY-MM');
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
-  const currentUserId = useAppStore(state => state.currentUserId);
-  const userBills = useMemo(
-    () => bills.filter(bill => bill.userId === currentUserId && !bill.deleted),
-    [bills, currentUserId],
+  const accounts = useAppStore(state => state.accounts);
+  const currentUserId = useAuthStore(state => state.currentUserId);
+  const getTrendByRange = useAppStore(state => state.getTrendByRange);
+  const getCategoryBreakdownByRange = useAppStore(state => state.getCategoryBreakdownByRange);
+  const getPreviousPeriodTotalByRange = useAppStore(state => state.getPreviousPeriodTotalByRange);
+  const getIncomeExpenseTotalsByRange = useAppStore(state => state.getIncomeExpenseTotalsByRange);
+  const visibleCategories = useMemo(
+    () =>
+      categories
+        .filter(category => category.userId === null || category.userId === currentUserId)
+        .sort((left, right) => left.sortNum - right.sortNum),
+    [categories, currentUserId],
   );
-  const overview = useMemo(() => {
-    const currentMonth = dayjs().format('YYYY-MM');
-    const monthIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM') === currentMonth,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === currentMonth,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-
-    return {
-      monthIncome,
-      monthExpense,
-    };
-  }, [userBills]);
-  const categoryStats = useMemo(() => {
-    const monthBills = userBills.filter(
-      bill =>
-        bill.type === type && dayjs(bill.billTime).format('YYYY-MM') === month,
-    );
-    const total = monthBills.reduce((sum, bill) => sum + bill.amount, 0);
-    const categoryMap = new Map<number, number>();
-
-    monthBills.forEach(bill => {
-      categoryMap.set(
-        bill.categoryId,
-        (categoryMap.get(bill.categoryId) ?? 0) + bill.amount,
-      );
-    });
-
-    return Array.from(categoryMap.entries())
-      .map(([categoryId, amount]) => {
-        const category = categories.find(item => item.id === categoryId);
-
-        return {
-          categoryId,
-          categoryName: category?.name ?? '未分类',
-          color: category?.color ?? '#6C757D',
-          amount,
-          percentage: total > 0 ? amount / total : 0,
-        };
-      })
-      .sort((left, right) => right.amount - left.amount);
-  }, [userBills, month, type, categories]);
-  const trendStats = useMemo(() => {
-    const start = dayjs()
-      .subtract(rangeDays - 1, 'day')
-      .startOf('day');
-    const rangedBills = userBills.filter(
-      bill =>
-        bill.type === type &&
-        dayjs(bill.billTime).isAfter(start.subtract(1, 'millisecond')),
-    );
-
-    return Array.from({length: rangeDays}).map((_, index) => {
-      const date = start.add(index, 'day');
-      const amount = rangedBills
-        .filter(
-          bill =>
-            dayjs(bill.billTime).format('YYYY-MM-DD') ===
-            date.format('YYYY-MM-DD'),
-        )
-        .reduce((sum, bill) => sum + bill.amount, 0);
-
-      return {
-        label: date.format(rangeDays <= 7 ? 'MM/DD' : 'DD'),
-        amount,
-        date: date.format('YYYY-MM-DD'),
-      };
-    });
-  }, [userBills, rangeDays, type]);
-  const previousPeriodTotal = useMemo(() => {
-    const currentStart = dayjs()
-      .subtract(rangeDays - 1, 'day')
-      .startOf('day');
-    const previousStart = currentStart.subtract(rangeDays, 'day');
-
-    return userBills
-      .filter(bill => {
-        if (bill.type !== type) {
-          return false;
-        }
-        const billTime = dayjs(bill.billTime);
-        return (
-          billTime.isAfter(previousStart.subtract(1, 'millisecond')) &&
-          billTime.isBefore(currentStart)
-        );
-      })
-      .reduce((sum, bill) => sum + bill.amount, 0);
-  }, [rangeDays, type, userBills]);
+  const visibleAccounts = useMemo(
+    () =>
+      accounts
+        .filter(account => account.userId === currentUserId && !account.isArchived)
+        .sort((left, right) => {
+          if (left.sortNum !== right.sortNum) {
+            return left.sortNum - right.sortNum;
+          }
+          return left.createdAt.localeCompare(right.createdAt);
+        }),
+    [accounts, currentUserId],
+  );
+  const timeRange = useMemo(
+    () => resolveTimeRange(timePreset, customStartDate, customEndDate),
+    [timePreset, customStartDate, customEndDate],
+  );
+  const scopedFilters = useMemo(
+    () => ({
+      categoryId: selectedCategoryId,
+      accountId: selectedAccountId === 'ALL' ? undefined : selectedAccountId,
+      includeTransfers,
+    }),
+    [includeTransfers, selectedAccountId, selectedCategoryId],
+  );
+  const categoryStats = getCategoryBreakdownByRange(
+    timeRange.startDate,
+    timeRange.endDate,
+    type,
+    scopedFilters,
+  );
+  const trendStats = getTrendByRange(
+    timeRange.startDate,
+    timeRange.endDate,
+    type,
+    scopedFilters,
+  );
+  const previousPeriodTotal = getPreviousPeriodTotalByRange(
+    timeRange.startDate,
+    timeRange.endDate,
+    type,
+    scopedFilters,
+  );
+  const rangeCompareStats = getIncomeExpenseTotalsByRange(
+    timeRange.startDate,
+    timeRange.endDate,
+    scopedFilters,
+  );
+  const currentRangeTotal =
+    type === 'INCOME' ? rangeCompareStats.incomeTotal : rangeCompareStats.expenseTotal;
   const indicatorWidth = Math.max((switchWidth - 4) / 2, 0);
   const indicatorTranslateX = typeSwitchAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [2, 2 + indicatorWidth],
   });
-  const rangeIndicatorWidth = Math.max((rangeSwitchWidth - 4) / 2, 0);
-  const rangeIndicatorTranslateX = rangeSwitchAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [2, 2 + rangeIndicatorWidth],
-  });
   const switchThumbBackground =
     type === 'EXPENSE'
       ? isDark
-        ? 'rgba(224,106,58,0.26)'
-        : 'rgba(224,106,58,0.14)'
+        ? 'rgba(225,144,104,0.24)'
+        : 'rgba(197,106,60,0.15)'
       : isDark
-        ? 'rgba(45,156,116,0.28)'
-        : 'rgba(45,156,116,0.16)';
-  const switchTrackBackground = isDark ? '#101B21' : '#F7F2E8';
-  const switchBorderColor = isDark
-    ? 'rgba(142,148,143,0.28)'
-    : 'rgba(142,148,143,0.2)';
-  const selectedExpenseTextColor = isDark ? '#FFD8CB' : '#8A3E22';
-  const selectedIncomeTextColor = isDark ? '#CBF3E4' : '#216B4E';
-  const rangeTrackBackground = isDark ? '#111B22' : '#FBF7EF';
-  const rangeBorderColor = isDark
-    ? 'rgba(142,148,143,0.26)'
-    : 'rgba(142,148,143,0.2)';
-  const rangeThumbBackground = isDark ? '#2B3646' : '#ECE4FC';
-  const selectedRangeTextColor = isDark ? '#EAF2F0' : '#1F4346';
+        ? 'rgba(89,196,160,0.26)'
+        : 'rgba(29,138,108,0.16)';
+  const switchTrackBackground = chartTheme.panelMutedFill;
+  const switchBorderColor = chartTheme.panelBorder;
+  const selectedExpenseTextColor = isDark ? '#FFCAAF' : '#8D4A2E';
+  const selectedIncomeTextColor = isDark ? '#BBEED9' : '#1E6E54';
+  const selectedCategoryName =
+    selectedCategoryId === null
+      ? '全部分类'
+      : visibleCategories.find(category => category.id === selectedCategoryId)?.name ??
+        '全部分类';
+  const selectedAccountName =
+    selectedAccountId === 'ALL'
+      ? '全部账户'
+      : visibleAccounts.find(account => account.id === selectedAccountId)?.name ??
+        '全部账户';
 
   useEffect(() => {
     Animated.spring(typeSwitchAnim, {
@@ -170,16 +146,6 @@ export default function StatsScreen(): React.JSX.Element {
       useNativeDriver: true,
     }).start();
   }, [type, typeSwitchAnim]);
-
-  useEffect(() => {
-    Animated.spring(rangeSwitchAnim, {
-      toValue: rangeDays === 7 ? 0 : 1,
-      damping: 18,
-      stiffness: 215,
-      mass: 0.92,
-      useNativeDriver: true,
-    }).start();
-  }, [rangeDays, rangeSwitchAnim]);
 
   useEffect(() => {
     contentOpacity.setValue(0.76);
@@ -199,9 +165,20 @@ export default function StatsScreen(): React.JSX.Element {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [contentOpacity, contentTranslateY, type, rangeDays]);
+  }, [
+    contentOpacity,
+    contentTranslateY,
+    selectedAccountId,
+    selectedCategoryId,
+    includeTransfers,
+    timePreset,
+    type,
+    customStartDate,
+    customEndDate,
+    bills,
+  ]);
 
-  function handleTypeChange(nextType: 'INCOME' | 'EXPENSE') {
+  function handleTypeChange(nextType: StatsType) {
     if (nextType === type) {
       return;
     }
@@ -209,26 +186,21 @@ export default function StatsScreen(): React.JSX.Element {
     setType(nextType);
   }
 
-  function handleRangeChange(nextRange: 7 | 30) {
-    if (nextRange === rangeDays) {
-      return;
-    }
-    segmentedSwitchHaptic();
-    setRangeDays(nextRange);
-  }
-
-  function getSegmentTextColor(segmentType: 'INCOME' | 'EXPENSE'): string {
+  function getSegmentTextColor(segmentType: StatsType): string {
     const isSelected = segmentType === type;
     if (!isSelected) {
       return colors.muted;
     }
-    return segmentType === 'EXPENSE'
-      ? selectedExpenseTextColor
-      : selectedIncomeTextColor;
+    return segmentType === 'EXPENSE' ? selectedExpenseTextColor : selectedIncomeTextColor;
   }
 
-  function getRangeTextColor(targetRange: 7 | 30): string {
-    return rangeDays === targetRange ? selectedRangeTextColor : colors.muted;
+  function clearFilters(): void {
+    setTimePreset('THIS_MONTH');
+    setCustomStartDate(dayjs().subtract(6, 'day').format('YYYY-MM-DD'));
+    setCustomEndDate(dayjs().format('YYYY-MM-DD'));
+    setSelectedCategoryId(null);
+    setSelectedAccountId('ALL');
+    setIncludeTransfers(false);
   }
 
   return (
@@ -237,18 +209,71 @@ export default function StatsScreen(): React.JSX.Element {
         <View
           style={{
             paddingHorizontal: 20,
-            paddingTop: 12,
-            paddingBottom: 10,
-            gap: 16,
+            paddingTop: 10,
+            paddingBottom: 8,
+            gap: 10,
           }}>
-          <View style={{gap: 4}}>
-            <Text variant="headlineSmall" style={{fontWeight: '800'}}>
-              统计分析
-            </Text>
-            <Text variant="bodyMedium" style={{color: colors.muted}}>
-              用当前数据看消费结构和趋势。
-            </Text>
+          <View style={styles.headerRow}>
+            <View style={{gap: 4}}>
+              <Text variant="headlineSmall" style={{fontWeight: '800', color: colors.text}}>
+                统计分析
+              </Text>
+              <Text variant="bodyMedium" style={{color: colors.muted}}>
+                趋势、分类与收支对比共用同一组筛选条件
+              </Text>
+            </View>
           </View>
+
+          <View style={{flexDirection: 'row', gap: 8}}>
+            <TimePresetBar<CommonTimePreset>
+              value={timePreset}
+              options={statsTimePresetOptions}
+              onChange={setTimePreset}
+              chipStyle={[
+                styles.filterChip,
+                {
+                  borderColor: chartTheme.panelBorder,
+                  backgroundColor: chartTheme.panelMutedFill,
+                },
+              ]}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+            <CategoryFilterMenu
+              selectedCategoryId={selectedCategoryId}
+              categories={visibleCategories}
+              onChange={setSelectedCategoryId}
+              chipStyle={[
+                styles.filterChip,
+                {
+                  borderColor: chartTheme.panelBorder,
+                  backgroundColor: chartTheme.panelMutedFill,
+                },
+              ]}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+            <AccountFilterMenu
+              accounts={visibleAccounts}
+              selectedAccountId={selectedAccountId}
+              onChange={setSelectedAccountId}
+              chipStyle={[
+                styles.filterChip,
+                {
+                  borderColor: chartTheme.panelBorder,
+                  backgroundColor: chartTheme.panelMutedFill,
+                },
+              ]}
+              textStyle={{fontWeight: '600', color: colors.text}}
+            />
+          </View>
+
+          {timePreset === 'CUSTOM' ? (
+            <DateRangeFields
+              startDate={customStartDate}
+              endDate={customEndDate}
+              onStartDateChange={setCustomStartDate}
+              onEndDateChange={setCustomEndDate}
+            />
+          ) : null}
 
           <View
             onLayout={event => setSwitchWidth(event.nativeEvent.layout.width)}
@@ -310,115 +335,79 @@ export default function StatsScreen(): React.JSX.Element {
             </Pressable>
           </View>
 
-          <View
-            onLayout={event =>
-              setRangeSwitchWidth(event.nativeEvent.layout.width)
-            }
-            style={{
-              height: 44,
-              backgroundColor: rangeTrackBackground,
-              borderRadius: 22,
-              borderWidth: 1,
-              borderColor: rangeBorderColor,
-              padding: 2,
-              flexDirection: 'row',
-              overflow: 'hidden',
-            }}>
-            <Animated.View
-              style={{
-                position: 'absolute',
-                top: 2,
-                left: 0,
-                height: 40,
-                width: rangeIndicatorWidth,
-                borderRadius: 20,
-                backgroundColor: rangeThumbBackground,
-                transform: [{translateX: rangeIndicatorTranslateX}],
-              }}
-            />
-            <Pressable
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-              onPress={() => handleRangeChange(7)}>
-              <Text
-                variant="titleSmall"
-                style={{fontWeight: '700', color: getRangeTextColor(7)}}>
-                最近 7 天
-              </Text>
-            </Pressable>
-            <Pressable
-              style={{
-                flex: 1,
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 1,
-              }}
-              onPress={() => handleRangeChange(30)}>
-              <Text
-                variant="titleSmall"
-                style={{fontWeight: '700', color: getRangeTextColor(30)}}>
-                最近 30 天
-              </Text>
-            </Pressable>
-          </View>
+          <FilterSummaryChips
+            summaryText={`${timeRange.label} · ${selectedCategoryName} · ${selectedAccountName} · ${
+              includeTransfers ? '计入转账' : '排除转账'
+            }`}
+            onClear={clearFilters}
+            clearLabel="清空筛选"
+            summaryTextStyle={{color: colors.muted}}
+            clearTextStyle={{color: colors.primary}}
+          />
+          <Pressable
+            onPress={() => setIncludeTransfers(current => !current)}
+            style={[
+              styles.filterChip,
+              {
+                borderColor: chartTheme.panelBorder,
+                backgroundColor: includeTransfers
+                  ? isDark
+                    ? 'rgba(73,116,98,0.32)'
+                    : 'rgba(29,138,108,0.14)'
+                  : chartTheme.panelMutedFill,
+                alignSelf: 'flex-start',
+                flex: undefined,
+                minWidth: 110,
+              },
+            ]}>
+            <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+              {includeTransfers ? '已计入转账' : '默认排除转账'}
+            </Text>
+          </Pressable>
         </View>
         <ScrollView
           bounces={false}
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: 20,
-            paddingTop: 8,
+            paddingTop: 10,
           }}>
           <Animated.View
             style={{
-              gap: 16,
+              gap: 14,
               opacity: contentOpacity,
               transform: [{translateY: contentTranslateY}],
             }}>
-            <View style={{flexDirection: 'row', gap: 12}}>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 24,
-                  backgroundColor: colors.surface,
-                  padding: 16,
-                  gap: 6,
-                }}>
-                <Text style={{color: colors.muted}}>本月收入</Text>
-                <Text
-                  variant="titleLarge"
-                  style={{color: colors.income, fontWeight: '800'}}>
-                  ¥{overview.monthIncome.toFixed(2)}
-                </Text>
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  borderRadius: 24,
-                  backgroundColor: colors.surface,
-                  padding: 16,
-                  gap: 6,
-                }}>
-                <Text style={{color: colors.muted}}>本月支出</Text>
-                <Text
-                  variant="titleLarge"
-                  style={{color: colors.expense, fontWeight: '800'}}>
-                  ¥{overview.monthExpense.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            <PieChartCard title={`${month} 分类占比`} data={categoryStats} />
-            <TrendChartCard
-              title={`${rangeDays} 天趋势`}
-              data={trendStats}
+            <StatsSummaryStrip
               type={type}
-              rangeDays={rangeDays}
+              rangeDays={timeRange.days}
+              rangeLabel={timeRange.label}
+              totalAmount={currentRangeTotal}
               previousTotal={previousPeriodTotal}
+            />
+            {useXLChart ? (
+              <CashflowTrendXLCard
+                data={trendStats}
+                type={type}
+                rangeDays={timeRange.days}
+                rangeLabel={timeRange.label}
+                previousTotal={previousPeriodTotal}
+              />
+            ) : (
+              <CashflowTrendCard
+                data={trendStats}
+                type={type}
+                rangeDays={timeRange.days}
+                rangeLabel={timeRange.label}
+                previousTotal={previousPeriodTotal}
+              />
+            )}
+            <CategoryDonutCard title={`${timeRange.label} 分类结构`} data={categoryStats} type={type} />
+            <CompareBarCard
+              rangeDays={timeRange.days}
+              rangeLabel={timeRange.label}
+              incomeTotal={rangeCompareStats.incomeTotal}
+              expenseTotal={rangeCompareStats.expenseTotal}
             />
           </Animated.View>
         </ScrollView>
@@ -426,3 +415,20 @@ export default function StatsScreen(): React.JSX.Element {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  filterChip: {
+    flex: 1,
+    height: 38,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+});

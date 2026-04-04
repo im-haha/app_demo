@@ -19,5 +19,7 @@ account-app-rn/android/app/src/main/assets/
 account-app-rn/android/app/src/main/res/drawable-*/node_modules_*
 account-app-rn/android/app/src/main/res/drawable-*/src_assets_*
 account-app-rn.zip
+account-app-rn/src.zip
+account-app-rn/src *.zip
 account-app-server/target
 account-app-server/data

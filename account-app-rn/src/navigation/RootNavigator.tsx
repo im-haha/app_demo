@@ -11,8 +11,12 @@ import BillEditScreen from '@/screens/bill/BillEditScreen';
 import BudgetScreen from '@/screens/budget/BudgetScreen';
 import CategoryManageScreen from '@/screens/category/CategoryManageScreen';
 import ProfileScreen from '@/screens/mine/ProfileScreen';
+import AccountListScreen from '@/screens/account/AccountListScreen';
+import AccountEditScreen from '@/screens/account/AccountEditScreen';
+import AccountLedgerScreen from '@/screens/account/AccountLedgerScreen';
 import {RootStackParamList} from './types';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {buildNavigationTheme, useResolvedThemeMode, useThemeColors} from '@/theme';
 import {APP_NAME} from '@/utils/constants';
 
@@ -41,10 +45,11 @@ export default function RootNavigator(): React.JSX.Element {
     () => buildNavigationTheme(resolvedThemeMode),
     [resolvedThemeMode],
   );
-  const hydrated = useAppStore(state => state.hydrated);
-  const isAuthenticated = useAppStore(state => Boolean(state.currentUserId && state.token));
+  const businessHydrated = useAppStore(state => state.hydrated);
+  const authHydrated = useAuthStore(state => state.hydrated);
+  const isAuthenticated = useAuthStore(state => Boolean(state.currentUserId));
 
-  if (!hydrated) {
+  if (!businessHydrated || !authHydrated) {
     return <SplashFallback colors={colors} />;
   }
 
@@ -90,6 +95,21 @@ export default function RootNavigator(): React.JSX.Element {
               name="CategoryManage"
               component={CategoryManageScreen}
               options={{title: '分类管理'}}
+            />
+            <Stack.Screen
+              name="AccountList"
+              component={AccountListScreen}
+              options={{title: '账户管理'}}
+            />
+            <Stack.Screen
+              name="AccountEdit"
+              component={AccountEditScreen}
+              options={{title: '账户编辑'}}
+            />
+            <Stack.Screen
+              name="AccountLedger"
+              component={AccountLedgerScreen}
+              options={{title: '账户流水'}}
             />
             <Stack.Screen name="Profile" component={ProfileScreen} options={{title: '个人资料'}} />
           </>

@@ -1,5 +1,5 @@
 import {useAppStore} from '@/store/appStore';
-import {BillFilters, BillInput, BillRecord} from '@/types/bill';
+import {BillFilters, BillInput, BillListSection, BillRecord} from '@/types/bill';
 import {ApiResponse, PageResult} from '@/types/api';
 
 export async function createBill(payload: BillInput): Promise<ApiResponse<null>> {
@@ -32,4 +32,14 @@ export async function getBillPage(
 ): Promise<ApiResponse<PageResult<BillRecord>>> {
   const list = useAppStore.getState().getBills(filters);
   return {code: 200, message: 'success', data: {list, total: list.length}};
+}
+
+export async function getBillSections(
+  filters?: BillFilters,
+): Promise<ApiResponse<BillListSection[]>> {
+  return {
+    code: 200,
+    message: 'success',
+    data: useAppStore.getState().getBillSections(filters),
+  };
 }

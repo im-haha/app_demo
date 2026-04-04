@@ -1,17 +1,17 @@
 import * as yup from 'yup';
 
 export const loginSchema = yup.object({
-  username: yup.string().trim().min(3, '用户名至少 3 位').required('请输入用户名'),
-  password: yup.string().min(6, '密码至少 6 位').required('请输入密码'),
+  username: yup.string().trim().min(3, '账本账号至少 3 位').required('请输入账本账号'),
+  password: yup.string().min(6, '解锁口令至少 6 位').required('请输入解锁口令'),
 });
 
 export const registerSchema = yup.object({
-  username: yup.string().trim().min(3, '用户名至少 3 位').required('请输入用户名'),
-  password: yup.string().min(6, '密码至少 6 位').required('请输入密码'),
+  username: yup.string().trim().min(3, '账本账号至少 3 位').required('请输入账本账号'),
+  password: yup.string().min(6, '解锁口令至少 6 位').required('请输入解锁口令'),
   confirmPassword: yup
     .string()
-    .required('请确认密码')
-    .oneOf([yup.ref('password')], '两次密码不一致'),
+    .required('请确认解锁口令')
+    .oneOf([yup.ref('password')], '两次口令不一致'),
   nickname: yup.string().trim().min(2, '昵称至少 2 位').required('请输入昵称'),
 });
 

@@ -1,6 +1,9 @@
-import React from 'react';
+import React, {useRef, useState} from 'react';
 import {TextInput, Text} from 'react-native-paper';
-import {View} from 'react-native';
+import {Keyboard, View} from 'react-native';
+import type {TextInputProps as RNTextInputProps} from 'react-native';
+import Svg, {Circle, Path} from 'react-native-svg';
+import {useThemeColors} from '@/theme';
 
 interface Props {
   label: string;
@@ -8,9 +11,51 @@ interface Props {
   onChangeText: (value: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
-  keyboardType?: 'default' | 'numeric';
+  keyboardType?: RNTextInputProps['keyboardType'];
   multiline?: boolean;
+  autoComplete?: RNTextInputProps['autoComplete'];
+  textContentType?: RNTextInputProps['textContentType'];
+  importantForAutofill?: RNTextInputProps['importantForAutofill'];
+  autoCapitalize?: RNTextInputProps['autoCapitalize'];
+  autoCorrect?: boolean;
+  spellCheck?: boolean;
   errorText?: string;
+}
+
+type BlurCapableInput = {
+  blur?: () => void;
+};
+
+type PasswordEyeIconProps = {
+  size: number;
+  color: string;
+  hidden: boolean;
+};
+
+function PasswordEyeIcon({size, color, hidden}: PasswordEyeIconProps): React.JSX.Element {
+  const iconSize = Math.max(16, size - 4);
+
+  return (
+    <Svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 12C5.1 8.2 8.3 6.3 12 6.3C15.7 6.3 18.9 8.2 21 12C18.9 15.8 15.7 17.7 12 17.7C8.3 17.7 5.1 15.8 3 12Z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx="12" cy="12" r="2.7" stroke={color} strokeWidth={1.8} />
+      {hidden ? (
+        <Path
+          d="M5 19L19 5"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+    </Svg>
+  );
 }
 
 function AppInput({
@@ -21,24 +66,92 @@ function AppInput({
   secureTextEntry,
   keyboardType = 'default',
   multiline,
+  autoComplete,
+  textContentType,
+  importantForAutofill,
+  autoCapitalize = 'none',
+  autoCorrect = false,
+  spellCheck,
   errorText,
 }: Props): React.JSX.Element {
+  const colors = useThemeColors();
+  const isPasswordField = Boolean(secureTextEntry);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<BlurCapableInput | null>(null);
+  const blockNextFocusRef = useRef(false);
+
+  function handlePressIn(): void {
+    if (!isFocused) {
+      return;
+    }
+    blockNextFocusRef.current = true;
+    inputRef.current?.blur?.();
+    Keyboard.dismiss();
+  }
+
   return (
-    <View style={{gap: 6}}>
+    <View style={{gap: 8, marginTop: 2}}>
+      <Text
+        variant="labelLarge"
+        style={{marginLeft: 12, color: colors.muted, fontWeight: '600'}}>
+        {label}
+      </Text>
       <TextInput
-        label={label}
+        ref={(instance: unknown) => {
+          inputRef.current = instance as unknown as BlurCapableInput | null;
+        }}
+        key={isPasswordField ? `${label}-${isPasswordVisible ? 'visible' : 'hidden'}` : label}
         value={value}
         onChangeText={onChangeText}
+        onPressIn={handlePressIn}
+        onFocus={() => {
+          if (blockNextFocusRef.current) {
+            blockNextFocusRef.current = false;
+            inputRef.current?.blur?.();
+            Keyboard.dismiss();
+            return;
+          }
+          setIsFocused(true);
+        }}
+        onBlur={() => setIsFocused(false)}
         placeholder={placeholder}
-        secureTextEntry={secureTextEntry}
+        secureTextEntry={isPasswordField ? !isPasswordVisible : false}
         keyboardType={keyboardType}
         multiline={multiline}
+        autoComplete={isPasswordField ? 'off' : autoComplete}
+        textContentType={isPasswordField ? 'none' : textContentType}
+        importantForAutofill={importantForAutofill}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={isPasswordField ? false : autoCorrect}
+        spellCheck={isPasswordField ? false : spellCheck}
+        right={
+          isPasswordField ? (
+            <TextInput.Icon
+              icon={({color = '#6F7A76', size = 20}) => (
+                <PasswordEyeIcon
+                  color={color}
+                  size={size}
+                  hidden={!isPasswordVisible}
+                />
+              )}
+              forceTextInputFocus={false}
+              onPress={() => setIsPasswordVisible(current => !current)}
+              style={{marginRight: 4}}
+            />
+          ) : undefined
+        }
         mode="outlined"
         outlineStyle={{borderRadius: 18}}
-        contentStyle={{paddingHorizontal: 8}}
+        contentStyle={{
+          paddingLeft: 8,
+          paddingRight: 10,
+          paddingVertical: 12,
+          fontSize: 16,
+        }}
       />
       {errorText ? (
-        <Text variant="bodySmall" style={{color: '#C44536'}}>
+        <Text variant="bodySmall" style={{color: '#C44536', lineHeight: 18}}>
           {errorText}
         </Text>
       ) : null}

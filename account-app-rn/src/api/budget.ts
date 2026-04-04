@@ -14,3 +14,20 @@ export async function getBudget(month: string): Promise<ApiResponse<BudgetSummar
     data: useAppStore.getState().getBudgetByMonth(month),
   };
 }
+
+export async function getBudgetHistory(limit = 12): Promise<ApiResponse<BudgetSummary[]>> {
+  return {
+    code: 200,
+    message: 'success',
+    data: useAppStore.getState().getBudgetHistory(limit),
+  };
+}
+
+export async function copyLastMonthBudget(month: string): Promise<ApiResponse<null>> {
+  useAppStore.getState().copyBudgetFromLastMonth(month);
+  return {
+    code: 200,
+    message: 'success',
+    data: null,
+  };
+}

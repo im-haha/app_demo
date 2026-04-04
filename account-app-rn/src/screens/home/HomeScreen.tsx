@@ -1,119 +1,52 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Animated, ScrollView, View} from 'react-native';
-import {useNavigation} from '@react-navigation/native';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {Alert, Animated, ScrollView, View} from 'react-native';
 import {Card, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useAppStore} from '@/store/appStore';
+import {useAuthStore} from '@/store/authStore';
 import {useResolvedThemeMode, useThemeColors} from '@/theme';
 import {formatCurrency, formatSignedCurrency} from '@/utils/format';
 import BillCard from '@/components/bill/BillCard';
+import SwipeableBillRow from '@/components/bill/SwipeableBillRow';
 import EmptyState from '@/components/common/EmptyState';
 import PlusLineIcon from '@/components/common/icons/PlusLineIcon';
 import DraggableFab from '@/components/common/DraggableFab';
+import {useRecentBills} from '@/store/selectors/billSelectors';
+import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
+import {useMainTabNavigation} from '@/navigation/hooks';
+import {deleteBill} from '@/api/bill';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
-  const navigation = useNavigation<any>();
+  const navigation = useMainTabNavigation<'Home'>();
   const insets = useSafeAreaInsets();
   const fabBottom = 24 + Math.max(insets.bottom, 8);
   const listBottomPadding = fabBottom + 88;
   const month = dayjs().format('YYYY-MM');
-  const users = useAppStore(state => state.users);
-  const storeBills = useAppStore(state => state.bills);
-  const budgets = useAppStore(state => state.budgets);
-  const currentUserId = useAppStore(state => state.currentUserId);
+  const users = useAuthStore(state => state.users);
+  const currentUserId = useAuthStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
-  const userBills = useMemo(
-    () =>
-      storeBills
-        .filter(bill => bill.userId === currentUserId && !bill.deleted)
-        .sort(
-          (left, right) =>
-            dayjs(right.billTime).valueOf() - dayjs(left.billTime).valueOf(),
-        ),
-    [storeBills, currentUserId],
-  );
-  const overview = useMemo(() => {
-    const today = dayjs().format('YYYY-MM-DD');
-    const todayIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM-DD') === today,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const todayExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM-DD') === today,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthIncome = userBills
-      .filter(
-        bill =>
-          bill.type === 'INCOME' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const monthExpense = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-
-    return {
-      todayIncome,
-      todayExpense,
-      monthIncome,
-      monthExpense,
-      monthBalance: monthIncome - monthExpense,
-    };
-  }, [userBills, month]);
-  const budget = useMemo(() => {
-    if (!currentUserId) {
-      return {
-        month,
-        budgetAmount: 0,
-        spentAmount: 0,
-        remainingAmount: 0,
-        usageRate: 0,
-      };
-    }
-
-    const budgetSetting = budgets.find(
-      item => item.userId === currentUserId && item.month === month,
-    );
-    const spentAmount = userBills
-      .filter(
-        bill =>
-          bill.type === 'EXPENSE' &&
-          dayjs(bill.billTime).format('YYYY-MM') === month,
-      )
-      .reduce((sum, bill) => sum + bill.amount, 0);
-    const budgetAmount = budgetSetting?.amount ?? 0;
-    const remainingAmount = budgetAmount - spentAmount;
-    const usageRate =
-      budgetAmount > 0 ? Math.min(spentAmount / budgetAmount, 1) : 0;
-
-    return {
-      month,
-      budgetAmount,
-      spentAmount,
-      remainingAmount,
-      usageRate,
-    };
-  }, [month, budgets, userBills, currentUserId]);
-  const bills = useMemo(() => userBills.slice(0, 5), [userBills]);
+  const accounts = useAppStore(state => state.accounts);
+  const overview = useMonthlyOverview(month);
+  const budget = useBudgetSummary(month);
+  const bills = useRecentBills(5);
+  const [activeSwipeRowKey, setActiveSwipeRowKey] = useState<number | null>(null);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const accountNameMap = useMemo(() => {
+    const map = new Map<number, string>();
+    accounts
+      .filter(account => account.userId === currentUserId)
+      .forEach(account => {
+        map.set(account.id, account.name);
+      });
+    return map;
+  }, [accounts, currentUserId]);
   const budgetBarAnim = useRef(new Animated.Value(0)).current;
   const [budgetTrackWidth, setBudgetTrackWidth] = useState(0);
   const budgetUsageRate = Math.min(Math.max(budget.usageRate, 0), 1);
@@ -132,6 +65,24 @@ export default function HomeScreen(): React.JSX.Element {
       useNativeDriver: false,
     }).start();
   }, [budgetBarAnim, budgetUsageRate]);
+
+  const handleDeleteBill = useCallback((billId: number) => {
+    Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
+      {text: '取消', style: 'cancel'},
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteBill(billId);
+          } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : '请稍后重试';
+            Alert.alert('删除失败', message);
+          }
+        },
+      },
+    ]);
+  }, []);
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -152,6 +103,7 @@ export default function HomeScreen(): React.JSX.Element {
         </View>
         <ScrollView
           bounces={false}
+          onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
           contentContainerStyle={{
             paddingHorizontal: 20,
             paddingBottom: listBottomPadding,
@@ -301,17 +253,42 @@ export default function HomeScreen(): React.JSX.Element {
                 icon="notebook-plus-outline"
               />
             ) : (
-              bills.map(bill => (
-                <BillCard
-                  key={bill.id}
-                  bill={bill}
-                  category={categories.find(
-                    item => item.id === bill.categoryId,
-                  )}
-                  onPress={() =>
-                    navigation.navigate('BillDetail', {billId: bill.id})
-                  }
-                />
+              bills.map(item => (
+                <View key={item.id} style={{marginBottom: 10}}>
+                  <SwipeableBillRow
+                    rowKey={item.id}
+                    activeRowKey={activeSwipeRowKey}
+                    onRowOpen={setActiveSwipeRowKey}
+                    onRowClose={rowKey =>
+                      setActiveSwipeRowKey(current =>
+                        current === rowKey ? null : current,
+                      )
+                    }
+                    onPress={() =>
+                      navigation.navigate('BillDetail', {
+                        billId: item.id,
+                      })
+                    }
+                    onEdit={() =>
+                      navigation.navigate('BillEdit', {
+                        billId: item.id,
+                      })
+                    }
+                    onDelete={() => handleDeleteBill(item.id)}>
+                    <BillCard
+                      bill={item}
+                      category={categories.find(
+                        category => category.id === item.categoryId,
+                      )}
+                      sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+                      transferTargetAccountName={
+                        item.transferTargetAccountId
+                          ? accountNameMap.get(item.transferTargetAccountId)
+                          : undefined
+                      }
+                    />
+                  </SwipeableBillRow>
+                </View>
               ))
             )}
           </View>

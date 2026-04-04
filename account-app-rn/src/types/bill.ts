@@ -7,6 +7,20 @@ export type AccountType =
   | 'WECHAT'
   | 'OTHER';
 
+export interface Account {
+  id: number;
+  userId: number;
+  name: string;
+  type: AccountType;
+  openingBalance: number;
+  currentBalance: number;
+  includeInTotal: boolean;
+  isArchived: boolean;
+  sortNum: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Category {
   id: number;
   userId: number | null;
@@ -32,6 +46,12 @@ export interface BillRecord {
   deleted: boolean;
   createdAt: string;
   updatedAt: string;
+  accountId?: number | null;
+  merchant?: string;
+  tagNames?: string[];
+  isTransfer?: boolean;
+  transferTargetAccountId?: number | null;
+  source?: 'MANUAL' | 'IMPORT' | 'RECURRING';
 }
 
 export interface BillInput {
@@ -41,14 +61,57 @@ export interface BillInput {
   accountType: AccountType;
   billTime: string;
   remark: string;
+  accountId?: number | null;
+  merchant?: string;
+  tagNames?: string[];
+  isTransfer?: boolean;
+  transferTargetAccountId?: number | null;
+  source?: 'MANUAL' | 'IMPORT' | 'RECURRING';
 }
 
 export interface BillFilters {
   type?: BillType | 'ALL';
   categoryId?: number | null;
+  accountId?: number | null;
+  accountPerspectiveAccountId?: number | null;
   startDate?: string;
   endDate?: string;
   keyword?: string;
+  accountType?: AccountType | 'ALL';
+  includeTransfers?: boolean;
+  minAmount?: number;
+  maxAmount?: number;
+  month?: string;
+  merchantKeyword?: string;
+  tagKeyword?: string;
+  source?: BillRecord['source'] | 'ALL';
+}
+
+export interface BillAdvancedFilters extends BillFilters {
+  accountType?: AccountType | 'ALL';
+  minAmount?: number;
+  maxAmount?: number;
+  month?: string;
+}
+
+export interface BillListSection {
+  title: string;
+  date: string;
+  data: BillRecord[];
+  dayExpense: number;
+  dayIncome: number;
+}
+
+export type AccountLedgerDirection =
+  | 'INCOME'
+  | 'EXPENSE'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT';
+
+export interface AccountLedgerEntry {
+  bill: BillRecord;
+  direction: AccountLedgerDirection;
+  signedAmount: number;
 }
 
 export interface BudgetSetting {
@@ -85,7 +148,7 @@ export interface CategoryStat {
 }
 
 export interface TrendPoint {
-  label: string;
+  axisLabel: string;
   amount: number;
   date: string;
 }

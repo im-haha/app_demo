@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import {Modal, Platform, Pressable, View} from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {Text} from 'react-native-paper';
-import {useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors, useThemeTokens} from '@/theme';
 
 export type DateTimePickerMode = 'date' | 'time';
 
@@ -22,7 +22,13 @@ export default function DateTimePickerModal({
   onConfirm,
 }: DateTimePickerModalProps): React.JSX.Element {
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
+  const resolvedThemeMode = useResolvedThemeMode();
+  const isDark = resolvedThemeMode === 'dark';
   const [draftValue, setDraftValue] = useState<Date>(initialValue);
+  const modalMaskColor = isDark ? 'rgba(5, 10, 14, 0.74)' : 'rgba(20, 28, 38, 0.44)';
+  const modalCardColor = isDark ? '#0F1C22' : '#FFFFFF';
+  const modalCardBorder = isDark ? '#2E4A53' : '#D5DFEA';
 
   useEffect(() => {
     if (!visible) {
@@ -40,7 +46,7 @@ export default function DateTimePickerModal({
       <View
         style={{
           flex: 1,
-          backgroundColor: 'rgba(10,18,24,0.52)',
+          backgroundColor: modalMaskColor,
           justifyContent: 'center',
           paddingHorizontal: 20,
         }}>
@@ -50,7 +56,10 @@ export default function DateTimePickerModal({
             paddingVertical: 16,
             paddingHorizontal: 14,
             gap: 12,
-            backgroundColor: colors.surface,
+            backgroundColor: modalCardColor,
+            borderWidth: 1,
+            borderColor: modalCardBorder,
+            ...tokens.shadow.modal,
           }}>
           <Text variant="titleMedium" style={{fontWeight: '800', color: colors.text}}>
             {mode === 'date' ? '选择日期' : '选择时间'}
@@ -65,6 +74,10 @@ export default function DateTimePickerModal({
                 setDraftValue(date);
               }
             }}
+            locale={Platform.OS === 'ios' ? 'zh-CN' : undefined}
+            themeVariant={Platform.OS === 'ios' ? resolvedThemeMode : undefined}
+            textColor={Platform.OS === 'ios' ? colors.text : undefined}
+            accentColor={Platform.OS === 'ios' ? colors.primary : undefined}
             onDismiss={() => {}}
           />
 

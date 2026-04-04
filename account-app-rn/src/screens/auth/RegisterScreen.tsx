@@ -5,6 +5,7 @@ import {Card, Text} from 'react-native-paper';
 import {ValidationError} from 'yup';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
+import SecureInputWarmup from '@/components/common/SecureInputWarmup';
 import {withErrorCapture} from '@/lib/errorCapture';
 import {reportHandledError} from '@/lib/reportError';
 import {AuthStackParamList} from '@/navigation/types';
@@ -120,7 +121,10 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{flex: 1, backgroundColor: colors.background}}>
-      <ScrollView contentContainerStyle={{padding: 20, justifyContent: 'center', flexGrow: 1}}>
+      <SecureInputWarmup />
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{padding: 20, paddingVertical: 32}}>
         <Card mode="contained" style={{backgroundColor: colors.surface, borderRadius: 28}}>
           <Card.Content style={{paddingVertical: 20, gap: 20}}>
             <Text variant="headlineSmall" style={{fontWeight: '800'}}>

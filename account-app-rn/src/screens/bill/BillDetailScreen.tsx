@@ -56,6 +56,14 @@ export default function BillDetailScreen({
   const currentUserId = useAuthStore(state => state.currentUserId);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
+  const handleEdit = useCallback(() => {
+    try {
+      navigation.push('BillEdit', {billId: route.params.billId});
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('无法打开编辑页', message);
+    }
+  }, [navigation, route.params.billId]);
   const bill = useMemo(
     () =>
       bills.find(
@@ -93,15 +101,6 @@ export default function BillDetailScreen({
     bill.transferTargetAccountId,
   );
 
-  const handleEdit = useCallback(() => {
-    try {
-      navigation.push('BillEdit', {billId});
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '请稍后重试';
-      Alert.alert('无法打开编辑页', message);
-    }
-  }, [billId, navigation]);
-
   function handleDelete() {
     Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
       {text: '取消', style: 'cancel'},
@@ -111,7 +110,10 @@ export default function BillDetailScreen({
         onPress: async () => {
           try {
             await deleteBill(billId);
-            navigation.goBack();
+            navigation.reset({
+              index: 0,
+              routes: [{name: 'MainTabs', params: {screen: 'Bills'}}],
+            });
           } catch (error: unknown) {
             const message = error instanceof Error ? error.message : '请稍后重试';
             Alert.alert('删除失败', message);

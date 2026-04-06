@@ -1,5 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {Alert, Animated, ScrollView, View} from 'react-native';
+import {Alert, Animated, AppState, AppStateStatus, ScrollView, View} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import {Card, Text} from 'react-native-paper';
 import dayjs from 'dayjs';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import {useRecentBills} from '@/store/selectors/billSelectors';
 import {useBudgetSummary, useMonthlyOverview} from '@/store/selectors/statsSelectors';
 import {useMainTabNavigation} from '@/navigation/hooks';
 import {deleteBill} from '@/api/bill';
+import {getGreeting, getNextGreetingChangeTime} from '@/utils/greeting';
 
 export default function HomeScreen(): React.JSX.Element {
   const colors = useThemeColors();
@@ -34,6 +36,9 @@ export default function HomeScreen(): React.JSX.Element {
   const budget = useBudgetSummary(month);
   const bills = useRecentBills(5);
   const [activeSwipeRowKey, setActiveSwipeRowKey] = useState<number | null>(null);
+  const [greeting, setGreeting] = useState(() => getGreeting());
+  const greetingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const user = useMemo(
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
@@ -66,6 +71,59 @@ export default function HomeScreen(): React.JSX.Element {
     }).start();
   }, [budgetBarAnim, budgetUsageRate]);
 
+  const clearGreetingTimer = useCallback(() => {
+    if (greetingTimerRef.current) {
+      clearTimeout(greetingTimerRef.current);
+      greetingTimerRef.current = null;
+    }
+  }, []);
+
+  const refreshGreeting = useCallback(() => {
+    setGreeting(getGreeting());
+  }, []);
+
+  const scheduleNextGreetingUpdate = useCallback(() => {
+    clearGreetingTimer();
+    const now = new Date();
+    const nextTime = getNextGreetingChangeTime(now);
+    const delay = Math.max(nextTime.getTime() - now.getTime(), 1000);
+    greetingTimerRef.current = setTimeout(() => {
+      refreshGreeting();
+      scheduleNextGreetingUpdate();
+    }, delay);
+  }, [clearGreetingTimer, refreshGreeting]);
+
+  useEffect(() => {
+    refreshGreeting();
+    scheduleNextGreetingUpdate();
+    return clearGreetingTimer;
+  }, [clearGreetingTimer, refreshGreeting, scheduleNextGreetingUpdate]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshGreeting();
+      scheduleNextGreetingUpdate();
+      return clearGreetingTimer;
+    }, [clearGreetingTimer, refreshGreeting, scheduleNextGreetingUpdate]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      const prevAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+      const isBackToActive =
+        /inactive|background/.test(prevAppState) && nextAppState === 'active';
+      if (isBackToActive) {
+        refreshGreeting();
+        scheduleNextGreetingUpdate();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshGreeting, scheduleNextGreetingUpdate]);
+
   const handleDeleteBill = useCallback((billId: number) => {
     Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
       {text: '取消', style: 'cancel'},
@@ -95,7 +153,7 @@ export default function HomeScreen(): React.JSX.Element {
             gap: 4,
           }}>
           <Text variant="headlineMedium" style={{fontWeight: '800'}}>
-            早上好，{user?.nickname ?? '你'}
+            {greeting}，{user?.nickname ?? '你'}
           </Text>
           <Text variant="bodyMedium" style={{color: colors.muted}}>
             今天先把现金流看清楚。

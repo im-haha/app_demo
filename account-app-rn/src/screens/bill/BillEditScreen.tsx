@@ -61,9 +61,12 @@ export default function BillEditScreen({navigation, route}: Props): React.JSX.El
           await updateBill(route.params.billId, payload);
           Alert.alert('修改成功', '账单已更新', [
             {
-              text: '查看详情',
+              text: '查看列表',
               onPress: () =>
-                navigation.replace('BillDetail', {billId: route.params.billId}),
+                navigation.reset({
+                  index: 0,
+                  routes: [{name: 'MainTabs', params: {screen: 'Bills'}}],
+                }),
             },
           ]);
         } catch (error: unknown) {

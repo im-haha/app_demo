@@ -1,0 +1,150 @@
+name: iOS Release Simulator Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "发布标签（例如 v1.0.1）"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload-ios-simulator:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::缺少发布标签 tag"
+            exit 1
+          fi
+
+          SAFE_TAG="${TAG//\//-}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "safe_tag=${SAFE_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: account-app-rn/package-lock.json
+
+      - name: Setup Ruby (Bundler cache)
+        uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: account-app-rn/Gemfile
+        with:
+          bundler-cache: true
+
+      - name: Install JS dependencies
+        working-directory: account-app-rn
+        run: npm ci --prefer-offline --no-audit --progress=false
+
+      - name: Install CocoaPods dependencies
+        working-directory: account-app-rn/ios
+        env:
+          BUNDLE_GEMFILE: ../Gemfile
+        run: bundle exec pod install --deployment
+
+      - name: Build iPhone simulator release app
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -workspace account-app-rn/ios/AccountAppShell076.xcworkspace \
+            -scheme AccountAppShell076 \
+            -configuration Release \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "${RUNNER_TEMP}/ios-iphone" \
+            TARGETED_DEVICE_FAMILY=1 \
+            clean build \
+            | tee "${RUNNER_TEMP}/ios-build-iphone.log"
+
+      - name: Build iPad simulator release app
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -workspace account-app-rn/ios/AccountAppShell076.xcworkspace \
+            -scheme AccountAppShell076 \
+            -configuration Release \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "${RUNNER_TEMP}/ios-ipad" \
+            TARGETED_DEVICE_FAMILY=2 \
+            clean build \
+            | tee "${RUNNER_TEMP}/ios-build-ipad.log"
+
+      - name: Package iOS simulator artifacts
+        id: package
+        run: |
+          set -eo pipefail
+
+          OUT_DIR="${RUNNER_TEMP}/ios-release"
+          mkdir -p "${OUT_DIR}"
+
+          IPHONE_APP="${RUNNER_TEMP}/ios-iphone/Build/Products/Release-iphonesimulator/AccountAppShell076.app"
+          IPAD_APP="${RUNNER_TEMP}/ios-ipad/Build/Products/Release-iphonesimulator/AccountAppShell076.app"
+
+          if [[ ! -d "${IPHONE_APP}" ]]; then
+            echo "::error::未找到 iPhone 模拟器 .app: ${IPHONE_APP}"
+            exit 1
+          fi
+          if [[ ! -d "${IPAD_APP}" ]]; then
+            echo "::error::未找到 iPad 模拟器 .app: ${IPAD_APP}"
+            exit 1
+          fi
+
+          IPHONE_ZIP="${OUT_DIR}/accountapp-${{ steps.meta.outputs.safe_tag }}-ios-iphone-simulator.app.zip"
+          IPAD_ZIP="${OUT_DIR}/accountapp-${{ steps.meta.outputs.safe_tag }}-ios-ipad-simulator.app.zip"
+
+          ditto -c -k --sequesterRsrc --keepParent "${IPHONE_APP}" "${IPHONE_ZIP}"
+          ditto -c -k --sequesterRsrc --keepParent "${IPAD_APP}" "${IPAD_ZIP}"
+
+          echo "iphone_zip=${IPHONE_ZIP}" >> "${GITHUB_OUTPUT}"
+          echo "ipad_zip=${IPAD_ZIP}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-${{ steps.meta.outputs.tag }}
+          if-no-files-found: error
+          path: |
+            ${{ steps.package.outputs.iphone_zip }}
+            ${{ steps.package.outputs.ipad_zip }}
+
+      - name: Upload iOS debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-debug-files-${{ steps.meta.outputs.tag }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/ios-build-iphone.log
+            ${{ runner.temp }}/ios-build-ipad.log
+
+      - name: Attach iOS artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          files: |
+            ${{ steps.package.outputs.iphone_zip }}
+            ${{ steps.package.outputs.ipad_zip }}

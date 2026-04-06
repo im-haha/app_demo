@@ -1,4 +1,4 @@
-name: Android Release APK
+name: Mobile Release Android APK
 
 on:
   push:
@@ -52,7 +52,7 @@ jobs:
           fi
 
           if [[ -z "${NAME}" ]]; then
-            NAME="Android ${TAG}"
+            NAME="Mobile ${TAG}"
           fi
 
           HAS_NOTES=false
@@ -380,6 +380,12 @@ jobs:
             echo
 
             echo "## 下载地址"
+            echo
+            echo "### iOS"
+            echo "- iPhone 模拟器包: [accountapp-${RELEASE_TAG}-ios-iphone-simulator.app.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-ios-iphone-simulator.app.zip)"
+            echo "- iPad 模拟器包: [accountapp-${RELEASE_TAG}-ios-ipad-simulator.app.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-ios-ipad-simulator.app.zip)"
+            echo "- 说明: 以上为模拟器包（Simulator），用于调试验证，不可直接安装到真机。"
+            echo "- 若未看到 iOS 文件，请检查工作流 \`iOS Release Simulator Artifacts\` 是否执行成功。"
             echo
             echo "### Android"
             echo "- 通用 APK（推荐）: [accountapp-${RELEASE_TAG}-android.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-android.apk)"

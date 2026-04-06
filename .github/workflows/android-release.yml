@@ -154,10 +154,36 @@ jobs:
             echo "keyPassword=${RESOLVED_KEY_PASSWORD}"
           } > keystore.properties
 
+      - name: Prepare Sentry upload config
+        working-directory: account-app-rn/android
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ secrets.SENTRY_URL }}
+        run: |
+          if [[ -n "${SENTRY_AUTH_TOKEN}" && -n "${SENTRY_ORG}" && -n "${SENTRY_PROJECT}" ]]; then
+            {
+              echo "defaults.url=${SENTRY_URL:-https://sentry.io/}"
+              echo "auth.token=${SENTRY_AUTH_TOKEN}"
+              echo "defaults.org=${SENTRY_ORG}"
+              echo "defaults.project=${SENTRY_PROJECT}"
+            } > sentry.properties
+            echo "SENTRY_DISABLE_AUTO_UPLOAD=false" >> "${GITHUB_ENV}"
+          else
+            echo "::warning::Sentry secrets are incomplete (require SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT). Disable Sentry upload for this release build."
+            rm -f sentry.properties
+            echo "SENTRY_DISABLE_AUTO_UPLOAD=true" >> "${GITHUB_ENV}"
+          fi
+
       - name: Build release APK
         working-directory: account-app-rn/android
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: armeabi-v7a,arm64-v8a
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_URL: ${{ secrets.SENTRY_URL }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease \
@@ -345,4 +371,4 @@ jobs:
       - name: Cleanup signing files
         if: always()
         working-directory: account-app-rn/android
-        run: rm -f keystore.properties app/release.keystore
+        run: rm -f keystore.properties app/release.keystore sentry.properties

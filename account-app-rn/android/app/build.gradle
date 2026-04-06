@@ -76,6 +76,8 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'org.webkit:android-jsc:+'
+def hasSentryAuthToken = !((System.getenv("SENTRY_AUTH_TOKEN") ?: "").trim().isEmpty())
+def sentryUploadEnabled = shouldSentryAutoUpload() && hasSentryAuthToken
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -150,13 +152,13 @@ dependencies {
 }
 
 sentry {
-    autoUploadProguardMapping = shouldSentryAutoUpload()
-    includeProguardMapping = true
+    autoUploadProguardMapping = sentryUploadEnabled
+    includeProguardMapping = sentryUploadEnabled
     dexguardEnabled = false
-    uploadNativeSymbols = shouldSentryAutoUpload()
-    autoUploadNativeSymbols = shouldSentryAutoUpload()
-    includeNativeSources = true
-    includeSourceContext = shouldSentryAutoUpload()
+    uploadNativeSymbols = sentryUploadEnabled
+    autoUploadNativeSymbols = sentryUploadEnabled
+    includeNativeSources = sentryUploadEnabled
+    includeSourceContext = sentryUploadEnabled
     tracingInstrumentation {
         enabled = false
     }

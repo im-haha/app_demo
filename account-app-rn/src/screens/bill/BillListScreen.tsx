@@ -24,7 +24,7 @@ import {useBillSections} from '@/store/selectors/billSelectors';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
 import {formatCurrency} from '@/utils/format';
-import {BillFilters, BillListSection} from '@/types/bill';
+import {BillFilters, BillListSection, BillRecord} from '@/types/bill';
 import {BillTimePreset, billTimePresetOptions, resolveTimeRange} from '@/utils/timeRange';
 import {useMainTabNavigation} from '@/navigation/hooks';
 import {deleteBill} from '@/api/bill';
@@ -204,6 +204,13 @@ export default function BillListScreen(): React.JSX.Element {
     outputRange: [2, 2 + indicatorWidth, 2 + indicatorWidth * 2],
   });
   const hasSearchText = keywordInput.trim().length > 0;
+  const accountPerspectiveAccountId = useMemo(
+    () =>
+      isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
+        ? selectedAccountId
+        : undefined,
+    [isAccountPerspectiveEnabled, selectedAccountId],
+  );
   const selectedCategoryName =
     selectedCategoryId === null
       ? '全部分类'
@@ -348,6 +355,9 @@ export default function BillListScreen(): React.JSX.Element {
       },
     ]);
   }, []);
+  const handleSwipeRowClose = useCallback((rowKey: number) => {
+    setActiveSwipeRowKey(current => (current === rowKey ? null : current));
+  }, []);
 
   function getFilterTextColor(itemType: 'ALL' | 'INCOME' | 'EXPENSE'): string {
     if (type !== itemType) {
@@ -362,12 +372,8 @@ export default function BillListScreen(): React.JSX.Element {
     return isDark ? '#EAF2F0' : '#1F4346';
   }
 
-  function renderSectionHeader({
-    section,
-  }: {
-    section: BillListSection;
-  }): React.JSX.Element {
-    return (
+  const renderSectionHeader = useCallback(
+    ({section}: {section: BillListSection}): React.JSX.Element => (
       <View
         style={{
           marginTop: 4,
@@ -384,8 +390,53 @@ export default function BillListScreen(): React.JSX.Element {
           收 {formatCurrency(section.dayIncome)} / 支 {formatCurrency(section.dayExpense)}
         </Text>
       </View>
-    );
-  }
+    ),
+    [colors.muted, colors.text],
+  );
+
+  const renderBillItem = useCallback(
+    ({item}: {item: BillRecord}): React.JSX.Element => (
+      <View style={{marginBottom: 10}}>
+        <SwipeableBillRow
+          rowKey={item.id}
+          activeRowKey={activeSwipeRowKey}
+          onRowOpen={setActiveSwipeRowKey}
+          onRowClose={handleSwipeRowClose}
+          onPress={() =>
+            navigation.navigate('BillDetail', {
+              billId: item.id,
+            })
+          }
+          onEdit={() =>
+            navigation.navigate('BillEdit', {
+              billId: item.id,
+            })
+          }
+          onDelete={() => handleDeleteBill(item.id)}>
+          <BillCard
+            bill={item}
+            category={categoryMap.get(item.categoryId)}
+            sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+            transferTargetAccountName={
+              item.transferTargetAccountId
+                ? accountNameMap.get(item.transferTargetAccountId)
+                : undefined
+            }
+            accountPerspectiveAccountId={accountPerspectiveAccountId}
+          />
+        </SwipeableBillRow>
+      </View>
+    ),
+    [
+      activeSwipeRowKey,
+      accountNameMap,
+      accountPerspectiveAccountId,
+      categoryMap,
+      handleDeleteBill,
+      handleSwipeRowClose,
+      navigation,
+    ],
+  );
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -395,48 +446,14 @@ export default function BillListScreen(): React.JSX.Element {
           onScrollBeginDrag={() => setActiveSwipeRowKey(null)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={16}
+          windowSize={11}
+          removeClippedSubviews
           keyExtractor={item => String(item.id)}
           renderSectionHeader={renderSectionHeader}
-          renderItem={({item}) => (
-            <View style={{marginBottom: 10}}>
-              <SwipeableBillRow
-                rowKey={item.id}
-                activeRowKey={activeSwipeRowKey}
-                onRowOpen={setActiveSwipeRowKey}
-                onRowClose={rowKey =>
-                  setActiveSwipeRowKey(current =>
-                    current === rowKey ? null : current,
-                  )
-                }
-                onPress={() =>
-                  navigation.navigate('BillDetail', {
-                    billId: item.id,
-                  })
-                }
-                onEdit={() =>
-                  navigation.navigate('BillEdit', {
-                    billId: item.id,
-                  })
-                }
-                onDelete={() => handleDeleteBill(item.id)}>
-                <BillCard
-                  bill={item}
-                  category={categoryMap.get(item.categoryId)}
-                  sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
-                  transferTargetAccountName={
-                    item.transferTargetAccountId
-                      ? accountNameMap.get(item.transferTargetAccountId)
-                      : undefined
-                  }
-                  accountPerspectiveAccountId={
-                    isAccountPerspectiveEnabled && selectedAccountId !== 'ALL'
-                      ? selectedAccountId
-                      : undefined
-                  }
-                />
-              </SwipeableBillRow>
-            </View>
-          )}
+          renderItem={renderBillItem}
           stickySectionHeadersEnabled={false}
           ListHeaderComponent={
             <View

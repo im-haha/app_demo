@@ -23,8 +23,13 @@ export function getThemeColors(mode: ResolvedThemeMode): AppColors {
   return mode === 'dark' ? darkColors : lightColors;
 }
 
+const themeTokenCache: Record<ResolvedThemeMode, AppThemeTokens> = {
+  light: buildThemeTokens('light', lightColors),
+  dark: buildThemeTokens('dark', darkColors),
+};
+
 export function getThemeTokens(mode: ResolvedThemeMode): AppThemeTokens {
-  return buildThemeTokens(mode, getThemeColors(mode));
+  return themeTokenCache[mode];
 }
 
 function getSurfaceVariant(mode: ResolvedThemeMode): string {

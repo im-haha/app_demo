@@ -489,9 +489,16 @@ function ensureUserAccountDomainData(
   data: PersistedAppData,
   userId: number,
 ): PersistedAppData {
-  const withAccounts = ensureUserAccounts(data, userId);
-  const withBillAccounts = fillMissingBillAccountIds(withAccounts, userId);
+  const withBillAccounts = ensureUserAccountStructureData(data, userId);
   return recalculateUserAccountBalances(withBillAccounts, userId);
+}
+
+function ensureUserAccountStructureData(
+  data: PersistedAppData,
+  userId: number,
+): PersistedAppData {
+  const withAccounts = ensureUserAccounts(data, userId);
+  return fillMissingBillAccountIds(withAccounts, userId);
 }
 
 function buildDemoBills(data: PersistedAppData, userId: number): BillRecord[] {
@@ -925,7 +932,7 @@ export function listAccounts(
 ): Account[] {
   const userId = ensureCurrentUserId(currentUserId);
   const includeArchived = Boolean(options?.includeArchived);
-  const normalized = ensureUserAccountDomainData(data, userId);
+  const normalized = ensureUserAccounts(data, userId);
 
   return normalized.accounts
     .filter(account => account.userId === userId)
@@ -1297,7 +1304,7 @@ export function saveBill(
   billId?: number,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
-  const normalizedData = ensureUserAccountDomainData(data, userId);
+  const normalizedData = ensureUserAccountStructureData(data, userId);
   const now = nowString();
 
   if (payload.amount <= 0) {
@@ -1379,7 +1386,7 @@ export function deleteBill(
   billId: number,
 ): PersistedAppData {
   const userId = ensureCurrentUserId(currentUserId);
-  const normalizedData = ensureUserAccountDomainData(data, userId);
+  const normalizedData = ensureUserAccountStructureData(data, userId);
   const now = nowString();
   const existingBill = normalizedData.bills.find(
     bill => bill.id === billId && bill.userId === userId && !bill.deleted,
@@ -1571,6 +1578,13 @@ export interface RangeIncomeExpenseTotals {
   expenseTotal: number;
 }
 
+export interface StatsRangeSnapshot {
+  trend: TrendPoint[];
+  categoryStats: CategoryStat[];
+  previousPeriodTotal: number;
+  totals: RangeIncomeExpenseTotals;
+}
+
 export function getBillsByRange(
   data: PersistedAppData,
   currentUserId: number | null,
@@ -1712,6 +1726,96 @@ export function getIncomeExpenseTotalsByRange(
   return {
     incomeTotal,
     expenseTotal,
+  };
+}
+
+export function getStatsSnapshotByRange(
+  data: PersistedAppData,
+  currentUserId: number | null,
+  startDate: string,
+  endDate: string,
+  type: BillType,
+  filters?: Omit<BillFilters, 'type' | 'startDate' | 'endDate' | 'month'>,
+): StatsRangeSnapshot {
+  const normalizedRange = normalizeDateRange(startDate, endDate);
+  const scopedFilters = {
+    includeTransfers: false,
+    ...filters,
+  };
+  const currentBills = getBillsByRange(
+    data,
+    currentUserId,
+    normalizedRange.startDate,
+    normalizedRange.endDate,
+    scopedFilters,
+  );
+
+  const categoryMap = new Map<number, number>();
+  const categoryLookup = new Map<number, Category>(
+    data.categories.map(category => [category.id, category]),
+  );
+  let incomeTotal = 0;
+  let expenseTotal = 0;
+  let scopedTypeTotal = 0;
+
+  currentBills.forEach(bill => {
+    if (bill.type === 'INCOME') {
+      incomeTotal += bill.amount;
+    } else {
+      expenseTotal += bill.amount;
+    }
+
+    if (bill.type !== type) {
+      return;
+    }
+    scopedTypeTotal += bill.amount;
+    categoryMap.set(bill.categoryId, (categoryMap.get(bill.categoryId) ?? 0) + bill.amount);
+  });
+
+  const categoryStats = Array.from(categoryMap.entries())
+    .map(([categoryId, amount]) => {
+      const category = categoryLookup.get(categoryId);
+      return {
+        categoryId,
+        categoryName: category?.name ?? '未分类',
+        color: category?.color ?? '#6C757D',
+        amount,
+        percentage: scopedTypeTotal > 0 ? amount / scopedTypeTotal : 0,
+      };
+    })
+    .sort((left, right) => right.amount - left.amount);
+
+  const trend = buildStatsTrendPointsByRange(
+    currentBills,
+    normalizedRange.startDate,
+    normalizedRange.endDate,
+    type,
+  );
+
+  const currentStart = dayjs(normalizedRange.startDate).startOf('day');
+  const previousEnd = currentStart.subtract(1, 'day').format('YYYY-MM-DD');
+  const previousStart = dayjs(previousEnd)
+    .subtract(normalizedRange.days - 1, 'day')
+    .format('YYYY-MM-DD');
+  const previousBills = getBillsByRange(
+    data,
+    currentUserId,
+    previousStart,
+    previousEnd,
+    scopedFilters,
+  );
+  const previousPeriodTotal = previousBills
+    .filter(bill => bill.type === type)
+    .reduce((sum, bill) => sum + bill.amount, 0);
+
+  return {
+    trend,
+    categoryStats,
+    previousPeriodTotal,
+    totals: {
+      incomeTotal,
+      expenseTotal,
+    },
   };
 }
 

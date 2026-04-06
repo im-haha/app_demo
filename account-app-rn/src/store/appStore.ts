@@ -426,9 +426,16 @@ export const useAppStore = create<AppState>()(
   ),
 );
 
+let lastSyncedCurrentUserId = useAuthStore.getState().currentUserId;
+
 useAuthStore.subscribe(state => {
   try {
     const {currentUserId} = state;
+    if (currentUserId === lastSyncedCurrentUserId) {
+      return;
+    }
+    lastSyncedCurrentUserId = currentUserId;
+
     useAppStore.setState(previous => {
       const syncedState =
         previous.currentUserId === currentUserId

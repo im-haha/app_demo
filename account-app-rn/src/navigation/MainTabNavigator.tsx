@@ -183,6 +183,8 @@ export default function MainTabNavigator(): React.JSX.Element {
     <Tab.Navigator
       screenOptions={({route}) => ({
         headerShown: false,
+        lazy: true,
+        freezeOnBlur: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarStyle,

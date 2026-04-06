@@ -3,6 +3,7 @@ import {Animated, Easing, Pressable, ScrollView, StyleSheet, View} from 'react-n
 import dayjs from 'dayjs';
 import {Text} from 'react-native-paper';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {getStatsSnapshotByRange, PersistedAppData} from '@/services/localAppService';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
 import CashflowTrendCard from '@/components/stats/CashflowTrendCard';
@@ -48,14 +49,12 @@ export default function StatsScreen(): React.JSX.Element {
   ).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const contentTranslateY = useRef(new Animated.Value(0)).current;
+  const schemaVersion = useAppStore(state => state.schemaVersion);
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
+  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getTrendByRange = useAppStore(state => state.getTrendByRange);
-  const getCategoryBreakdownByRange = useAppStore(state => state.getCategoryBreakdownByRange);
-  const getPreviousPeriodTotalByRange = useAppStore(state => state.getPreviousPeriodTotalByRange);
-  const getIncomeExpenseTotalsByRange = useAppStore(state => state.getIncomeExpenseTotalsByRange);
   const visibleCategories = useMemo(
     () =>
       categories
@@ -87,29 +86,41 @@ export default function StatsScreen(): React.JSX.Element {
     }),
     [includeTransfers, selectedAccountId, selectedCategoryId],
   );
-  const categoryStats = getCategoryBreakdownByRange(
+  const statsSnapshot = useMemo(() => {
+    const serviceData: PersistedAppData = {
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+    return getStatsSnapshotByRange(
+      serviceData,
+      currentUserId,
+      timeRange.startDate,
+      timeRange.endDate,
+      type,
+      scopedFilters,
+    );
+  }, [
+    schemaVersion,
+    categories,
+    accounts,
+    bills,
+    budgets,
+    currentUserId,
     timeRange.startDate,
     timeRange.endDate,
     type,
     scopedFilters,
-  );
-  const trendStats = getTrendByRange(
-    timeRange.startDate,
-    timeRange.endDate,
-    type,
-    scopedFilters,
-  );
-  const previousPeriodTotal = getPreviousPeriodTotalByRange(
-    timeRange.startDate,
-    timeRange.endDate,
-    type,
-    scopedFilters,
-  );
-  const rangeCompareStats = getIncomeExpenseTotalsByRange(
-    timeRange.startDate,
-    timeRange.endDate,
-    scopedFilters,
-  );
+  ]);
+  const categoryStats = statsSnapshot.categoryStats;
+  const trendStats = statsSnapshot.trend;
+  const previousPeriodTotal = statsSnapshot.previousPeriodTotal;
+  const rangeCompareStats = statsSnapshot.totals;
   const currentRangeTotal =
     type === 'INCOME' ? rangeCompareStats.incomeTotal : rangeCompareStats.expenseTotal;
   const indicatorWidth = Math.max((switchWidth - 4) / 2, 0);

@@ -43,6 +43,13 @@ export default function HomeScreen(): React.JSX.Element {
     () => users.find(item => item.id === currentUserId),
     [users, currentUserId],
   );
+  const categoryMap = useMemo(() => {
+    const map = new Map<number, (typeof categories)[number]>();
+    categories.forEach(category => {
+      map.set(category.id, category);
+    });
+    return map;
+  }, [categories]);
   const accountNameMap = useMemo(() => {
     const map = new Map<number, string>();
     accounts
@@ -141,6 +148,51 @@ export default function HomeScreen(): React.JSX.Element {
       },
     ]);
   }, []);
+  const handleSwipeRowClose = useCallback((rowKey: number) => {
+    setActiveSwipeRowKey(current => (current === rowKey ? null : current));
+  }, []);
+
+  const renderRecentBill = useCallback(
+    (item: (typeof bills)[number]): React.JSX.Element => (
+      <View key={item.id} style={{marginBottom: 10}}>
+        <SwipeableBillRow
+          rowKey={item.id}
+          activeRowKey={activeSwipeRowKey}
+          onRowOpen={setActiveSwipeRowKey}
+          onRowClose={handleSwipeRowClose}
+          onPress={() =>
+            navigation.navigate('BillDetail', {
+              billId: item.id,
+            })
+          }
+          onEdit={() =>
+            navigation.navigate('BillEdit', {
+              billId: item.id,
+            })
+          }
+          onDelete={() => handleDeleteBill(item.id)}>
+          <BillCard
+            bill={item}
+            category={categoryMap.get(item.categoryId)}
+            sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
+            transferTargetAccountName={
+              item.transferTargetAccountId
+                ? accountNameMap.get(item.transferTargetAccountId)
+                : undefined
+            }
+          />
+        </SwipeableBillRow>
+      </View>
+    ),
+    [
+      activeSwipeRowKey,
+      accountNameMap,
+      categoryMap,
+      handleDeleteBill,
+      handleSwipeRowClose,
+      navigation,
+    ],
+  );
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -316,43 +368,7 @@ export default function HomeScreen(): React.JSX.Element {
                 icon="notebook-plus-outline"
               />
             ) : (
-              bills.map(item => (
-                <View key={item.id} style={{marginBottom: 10}}>
-                  <SwipeableBillRow
-                    rowKey={item.id}
-                    activeRowKey={activeSwipeRowKey}
-                    onRowOpen={setActiveSwipeRowKey}
-                    onRowClose={rowKey =>
-                      setActiveSwipeRowKey(current =>
-                        current === rowKey ? null : current,
-                      )
-                    }
-                    onPress={() =>
-                      navigation.navigate('BillDetail', {
-                        billId: item.id,
-                      })
-                    }
-                    onEdit={() =>
-                      navigation.navigate('BillEdit', {
-                        billId: item.id,
-                      })
-                    }
-                    onDelete={() => handleDeleteBill(item.id)}>
-                    <BillCard
-                      bill={item}
-                      category={categories.find(
-                        category => category.id === item.categoryId,
-                      )}
-                      sourceAccountName={item.accountId ? accountNameMap.get(item.accountId) : undefined}
-                      transferTargetAccountName={
-                        item.transferTargetAccountId
-                          ? accountNameMap.get(item.transferTargetAccountId)
-                          : undefined
-                      }
-                    />
-                  </SwipeableBillRow>
-                </View>
-              ))
+              bills.map(renderRecentBill)
             )}
           </View>
         </ScrollView>

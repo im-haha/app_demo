@@ -135,7 +135,10 @@ const LoginCardContent = React.memo(function LoginCardContent({
 
 function resolveUnlockError(error: unknown): {title: string; message: string} {
   const rawMessage = error instanceof Error ? error.message : '请稍后重试';
-  if (rawMessage.includes('用户名或密码错误')) {
+  if (
+    rawMessage.includes('用户名或密码错误') ||
+    rawMessage.includes('账本账号或解锁口令错误')
+  ) {
     return {
       title: '账本凭证错误',
       message: '账本账号不存在或解锁口令错误，请检查后重试。',

@@ -127,6 +127,37 @@ function secureEquals(left: string, right: string): boolean {
   return diff === 0;
 }
 
+function buildMacPayloadV2(payload: {
+  algorithm: EncryptedBackupEnvelope['algorithm'];
+  iterations: number;
+  schemaVersion: number;
+  exportedAt: string;
+  userId: number;
+  saltHex: string;
+  ivHex: string;
+  ciphertextBase64: string;
+}): string {
+  return [
+    ENCRYPTED_BACKUP_FORMAT,
+    payload.algorithm,
+    String(payload.iterations),
+    String(payload.schemaVersion),
+    payload.exportedAt,
+    String(payload.userId),
+    payload.saltHex,
+    payload.ivHex,
+    payload.ciphertextBase64,
+  ].join(':');
+}
+
+function buildMacPayloadLegacy(payload: {
+  exportedAt: string;
+  userId: number;
+  ciphertextBase64: string;
+}): string {
+  return `${payload.userId}:${payload.exportedAt}:${payload.ciphertextBase64}`;
+}
+
 function encryptBackupPayload(
   payload: AppDataExportPayload,
   encryptionSecret: string,
@@ -152,7 +183,16 @@ function encryptBackupPayload(
   );
   const ciphertextBase64 = CryptoJS.enc.Base64.stringify(encrypted.ciphertext);
   const macHex = CryptoJS.HmacSHA256(
-    `${payload.userId}:${payload.exportedAt}:${ciphertextBase64}`,
+    buildMacPayloadV2({
+      algorithm: 'AES-256-CBC+HMAC-SHA256',
+      iterations: ENCRYPTION_ITERATIONS,
+      schemaVersion: payload.schemaVersion,
+      exportedAt: payload.exportedAt,
+      userId: payload.userId,
+      saltHex,
+      ivHex,
+      ciphertextBase64,
+    }),
     macKey,
   ).toString(CryptoJS.enc.Hex);
 
@@ -180,11 +220,31 @@ function decryptBackupPayload(
     encryptedPayload.saltHex,
     encryptedPayload.iterations,
   );
-  const expectedMac = CryptoJS.HmacSHA256(
-    `${encryptedPayload.userId}:${encryptedPayload.exportedAt}:${encryptedPayload.ciphertextBase64}`,
+  const expectedMacV2 = CryptoJS.HmacSHA256(
+    buildMacPayloadV2({
+      algorithm: encryptedPayload.algorithm,
+      iterations: encryptedPayload.iterations,
+      schemaVersion: encryptedPayload.schemaVersion,
+      exportedAt: encryptedPayload.exportedAt,
+      userId: encryptedPayload.userId,
+      saltHex: encryptedPayload.saltHex,
+      ivHex: encryptedPayload.ivHex,
+      ciphertextBase64: encryptedPayload.ciphertextBase64,
+    }),
     macKey,
   ).toString(CryptoJS.enc.Hex);
-  if (!secureEquals(expectedMac, encryptedPayload.macHex)) {
+  const expectedMacLegacy = CryptoJS.HmacSHA256(
+    buildMacPayloadLegacy({
+      userId: encryptedPayload.userId,
+      exportedAt: encryptedPayload.exportedAt,
+      ciphertextBase64: encryptedPayload.ciphertextBase64,
+    }),
+    macKey,
+  ).toString(CryptoJS.enc.Hex);
+  if (
+    !secureEquals(expectedMacV2, encryptedPayload.macHex) &&
+    !secureEquals(expectedMacLegacy, encryptedPayload.macHex)
+  ) {
     throw new Error('备份文件校验失败，口令错误或文件已损坏');
   }
 

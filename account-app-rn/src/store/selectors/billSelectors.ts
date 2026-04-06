@@ -1,43 +1,52 @@
 import {useMemo} from 'react';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
+import {
+  listBills,
+  listBillSections,
+  PersistedAppData,
+} from '@/services/localAppService';
 import {BillFilters, BillListSection, BillRecord} from '@/types/bill';
 
-function buildFiltersKey(filters?: BillFilters): string {
-  if (!filters) {
-    return 'all';
-  }
-
-  return JSON.stringify({
-    type: filters.type ?? 'ALL',
-    categoryId: filters.categoryId ?? null,
-    accountId: filters.accountId ?? null,
-    accountPerspectiveAccountId: filters.accountPerspectiveAccountId ?? null,
-    startDate: filters.startDate ?? null,
-    endDate: filters.endDate ?? null,
-    keyword: filters.keyword ?? null,
-    accountType: filters.accountType ?? 'ALL',
-    includeTransfers: filters.includeTransfers ?? null,
-    minAmount: filters.minAmount ?? null,
-    maxAmount: filters.maxAmount ?? null,
-    month: filters.month ?? null,
-    merchantKeyword: filters.merchantKeyword ?? null,
-    tagKeyword: filters.tagKeyword ?? null,
-    source: filters.source ?? 'ALL',
-  });
+function buildServiceData(
+  schemaVersion: number,
+  categories: PersistedAppData['categories'],
+  accounts: PersistedAppData['accounts'],
+  bills: PersistedAppData['bills'],
+  budgets: PersistedAppData['budgets'],
+  currentUserId: number | null,
+): PersistedAppData {
+  return {
+    schemaVersion,
+    categories,
+    accounts,
+    bills,
+    budgets,
+    users: [],
+    authCredentials: [],
+    currentUserId,
+  };
 }
 
 export function useRealBills(filters?: BillFilters): BillRecord[] {
+  const schemaVersion = useAppStore(state => state.schemaVersion);
+  const accounts = useAppStore(state => state.accounts);
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
+  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getBills = useAppStore(state => state.getBills);
-  const filtersKey = buildFiltersKey(filters);
 
-  return useMemo(
-    () => getBills(filters),
-    [getBills, filters, filtersKey, bills, categories, currentUserId],
-  );
+  return useMemo(() => {
+    const data = buildServiceData(
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      currentUserId,
+    );
+    return listBills(data, currentUserId, filters);
+  }, [schemaVersion, categories, accounts, bills, budgets, currentUserId, filters]);
 }
 
 export function useRecentBills(limit = 5): BillRecord[] {
@@ -46,14 +55,22 @@ export function useRecentBills(limit = 5): BillRecord[] {
 }
 
 export function useBillSections(filters?: BillFilters): BillListSection[] {
+  const schemaVersion = useAppStore(state => state.schemaVersion);
+  const accounts = useAppStore(state => state.accounts);
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
+  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getBillSections = useAppStore(state => state.getBillSections);
-  const filtersKey = buildFiltersKey(filters);
 
-  return useMemo(
-    () => getBillSections(filters),
-    [getBillSections, filters, filtersKey, bills, categories, currentUserId],
-  );
+  return useMemo(() => {
+    const data = buildServiceData(
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      currentUserId,
+    );
+    return listBillSections(data, currentUserId, filters);
+  }, [schemaVersion, categories, accounts, bills, budgets, currentUserId, filters]);
 }

@@ -66,7 +66,15 @@ export default function CompareBarCard({
         color: balance >= 0 ? chartTheme.positive : chartTheme.negative,
       },
     ],
-    [balance, chartTheme.negative, chartTheme.positive, colors.expense, colors.income],
+    [
+      balance,
+      incomeTotal,
+      expenseTotal,
+      chartTheme.negative,
+      chartTheme.positive,
+      colors.expense,
+      colors.income,
+    ],
   );
 
   const base = useMemo(

@@ -7,6 +7,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import BillCard from '@/components/bill/BillCard';
 import EmptyState from '@/components/common/EmptyState';
 import {RootStackParamList} from '@/navigation/types';
+import {listAccountLedger, PersistedAppData} from '@/services/localAppService';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
@@ -29,12 +30,26 @@ export default function AccountLedgerScreen({
   route,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
+  const schemaVersion = useAppStore(state => state.schemaVersion);
   const bills = useAppStore(state => state.bills);
   const categories = useAppStore(state => state.categories);
   const accounts = useAppStore(state => state.accounts);
+  const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getAccountLedger = useAppStore(state => state.getAccountLedger);
   const accountId = route.params.accountId;
+  const ledgerEntries = useMemo(() => {
+    const data: PersistedAppData = {
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+    return listAccountLedger(data, currentUserId, accountId);
+  }, [schemaVersion, categories, accounts, bills, budgets, currentUserId, accountId]);
 
   const account = useMemo(
     () =>
@@ -59,10 +74,6 @@ export default function AccountLedgerScreen({
       });
     return map;
   }, [accounts, currentUserId]);
-  const ledgerEntries = useMemo(
-    () => getAccountLedger(accountId),
-    [accountId, bills, currentUserId, getAccountLedger],
-  );
   const ledgerSections = useMemo<LedgerSection[]>(() => {
     const today = dayjs().format('YYYY-MM-DD');
     const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');

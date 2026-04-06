@@ -5,6 +5,11 @@ import {Button, Card, ProgressBar, Text} from 'react-native-paper';
 import AppButton from '@/components/common/AppButton';
 import AppInput from '@/components/common/AppInput';
 import {copyLastMonthBudget, saveBudget} from '@/api/budget';
+import {
+  getBudgetSummary,
+  listBudgetHistory,
+  PersistedAppData,
+} from '@/services/localAppService';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
 import {useThemeColors} from '@/theme';
@@ -15,19 +20,38 @@ export default function BudgetScreen(): React.JSX.Element {
   const currentMonth = dayjs().format('YYYY-MM');
   const [month, setMonth] = useState(currentMonth);
   const [amount, setAmount] = useState('');
+  const schemaVersion = useAppStore(state => state.schemaVersion);
+  const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const bills = useAppStore(state => state.bills);
   const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getBudgetByMonth = useAppStore(state => state.getBudgetByMonth);
-  const getBudgetHistoryStore = useAppStore(state => state.getBudgetHistory);
-  const summary = useMemo(
-    () => getBudgetByMonth(month),
-    [getBudgetByMonth, month, bills, budgets, currentUserId],
-  );
-  const history = useMemo(
-    () => getBudgetHistoryStore(12),
-    [getBudgetHistoryStore, bills, budgets, currentUserId],
-  );
+  const summary = useMemo(() => {
+    const data: PersistedAppData = {
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+    return getBudgetSummary(data, currentUserId, month);
+  }, [month, schemaVersion, categories, accounts, bills, budgets, currentUserId]);
+  const history = useMemo(() => {
+    const data: PersistedAppData = {
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+    return listBudgetHistory(data, currentUserId, 12);
+  }, [schemaVersion, categories, accounts, bills, budgets, currentUserId]);
   const canMoveNextMonth = dayjs(month).isBefore(dayjs(currentMonth), 'month');
 
   useEffect(() => {

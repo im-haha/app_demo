@@ -1,3 +1,4 @@
+import CryptoJS from 'crypto-js';
 import dayjs from 'dayjs';
 import {reportHandledError} from '@/lib/reportError';
 import {
@@ -64,8 +65,28 @@ export function normalizeUsername(username: string): string {
   return username.trim();
 }
 
-export function hashLocalPassword(username: string, password: string): string {
-  const source = `account-app-local-auth-v1|${normalizeUsername(username).toLowerCase()}|${password}`;
+const LOCAL_PASSWORD_HASH_V2_PREFIX = 'v2$';
+const LOCAL_PASSWORD_HASH_ITERATIONS = 180000;
+const LOCAL_PASSWORD_SALT_BYTES = 16;
+const LOCAL_PASSWORD_HASH_KEY_SIZE_WORDS = 256 / 32;
+const LOCAL_PASSWORD_SOURCE_V1_PREFIX = 'account-app-local-auth-v1';
+const LOCAL_PASSWORD_SOURCE_V2_PREFIX = 'account-app-local-auth-v2';
+
+function buildPasswordSource(
+  username: string,
+  password: string,
+  scheme: 'v1' | 'v2',
+): string {
+  const normalizedUsername = normalizeUsername(username).toLowerCase();
+  const prefix =
+    scheme === 'v2'
+      ? LOCAL_PASSWORD_SOURCE_V2_PREFIX
+      : LOCAL_PASSWORD_SOURCE_V1_PREFIX;
+  return `${prefix}|${normalizedUsername}|${password}`;
+}
+
+function hashLocalPasswordLegacy(username: string, password: string): string {
+  const source = buildPasswordSource(username, password, 'v1');
   let hashA = 0x811c9dc5;
   let hashB = 0x811c9dc5;
 
@@ -78,6 +99,132 @@ export function hashLocalPassword(username: string, password: string): string {
   }
 
   return `${hashA.toString(16).padStart(8, '0')}${hashB.toString(16).padStart(8, '0')}`;
+}
+
+export function hashLocalPassword(username: string, password: string): string {
+  return hashLocalPasswordLegacy(username, password);
+}
+
+function isHexString(value: string): boolean {
+  return /^[0-9a-f]+$/i.test(value);
+}
+
+function deriveLocalPasswordHashV2(
+  username: string,
+  password: string,
+  saltHex: string,
+  iterations: number,
+): string {
+  const source = buildPasswordSource(username, password, 'v2');
+  const derived = CryptoJS.PBKDF2(source, CryptoJS.enc.Hex.parse(saltHex), {
+    keySize: LOCAL_PASSWORD_HASH_KEY_SIZE_WORDS,
+    iterations,
+    hasher: CryptoJS.algo.SHA256,
+  });
+  return derived.toString(CryptoJS.enc.Hex);
+}
+
+export function createLocalPasswordHash(username: string, password: string): string {
+  const saltHex = CryptoJS.lib.WordArray.random(LOCAL_PASSWORD_SALT_BYTES).toString(
+    CryptoJS.enc.Hex,
+  );
+  const hashHex = deriveLocalPasswordHashV2(
+    username,
+    password,
+    saltHex,
+    LOCAL_PASSWORD_HASH_ITERATIONS,
+  );
+  return `${LOCAL_PASSWORD_HASH_V2_PREFIX}${LOCAL_PASSWORD_HASH_ITERATIONS}$${saltHex}$${hashHex}`;
+}
+
+type ParsedLocalPasswordHash =
+  | {
+      version: 'v2';
+      iterations: number;
+      saltHex: string;
+      hashHex: string;
+    }
+  | {
+      version: 'legacy';
+      hashHex: string;
+    };
+
+function parseStoredLocalPasswordHash(storedHash: string): ParsedLocalPasswordHash {
+  const normalized = storedHash.trim();
+  if (!normalized.startsWith(LOCAL_PASSWORD_HASH_V2_PREFIX)) {
+    return {
+      version: 'legacy',
+      hashHex: normalized,
+    };
+  }
+
+  const segments = normalized.split('$');
+  if (segments.length !== 4) {
+    return {
+      version: 'legacy',
+      hashHex: normalized,
+    };
+  }
+
+  const [, iterationText, saltHex, hashHex] = segments;
+  const iterations = Number(iterationText);
+  if (
+    !Number.isFinite(iterations) ||
+    iterations <= 0 ||
+    !isHexString(saltHex) ||
+    !isHexString(hashHex) ||
+    saltHex.length < 16 ||
+    hashHex.length < 32
+  ) {
+    return {
+      version: 'legacy',
+      hashHex: normalized,
+    };
+  }
+
+  return {
+    version: 'v2',
+    iterations,
+    saltHex: saltHex.toLowerCase(),
+    hashHex: hashHex.toLowerCase(),
+  };
+}
+
+function secureEquals(left: string, right: string): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return diff === 0;
+}
+
+export function verifyLocalPasswordHash(
+  username: string,
+  password: string,
+  storedHash: string,
+): boolean {
+  const parsed = parseStoredLocalPasswordHash(storedHash);
+  if (parsed.version === 'v2') {
+    const expectedHash = deriveLocalPasswordHashV2(
+      username,
+      password,
+      parsed.saltHex,
+      parsed.iterations,
+    );
+    return secureEquals(expectedHash, parsed.hashHex);
+  }
+
+  const expectedHash = hashLocalPasswordLegacy(username, password);
+  return secureEquals(expectedHash, parsed.hashHex);
+}
+
+export function shouldUpgradeLocalPasswordHash(storedHash: string): boolean {
+  const parsed = parseStoredLocalPasswordHash(storedHash);
+  return parsed.version === 'legacy';
 }
 
 interface LegacyUserProfile extends UserProfile {
@@ -118,7 +265,7 @@ export function normalizePersistedAppData(input: LegacyPersistedAppData): Persis
         )
         .map(item => ({
           userId: item.id,
-          passwordHash: hashLocalPassword(item.username, item.password as string),
+          passwordHash: createLocalPasswordHash(item.username, item.password as string),
           updatedAt: item.updatedAt ?? nowString(),
         }))
     : [];
@@ -511,7 +658,7 @@ export function registerUser(data: PersistedAppData, payload: RegisterPayload): 
   };
   const credential: LocalAuthCredential = {
     userId: user.id,
-    passwordHash: hashLocalPassword(username, payload.password),
+    passwordHash: createLocalPasswordHash(username, payload.password),
     updatedAt: now,
   };
 
@@ -532,16 +679,33 @@ export function loginUser(data: PersistedAppData, username: string, password: st
   const credential = user
     ? data.authCredentials.find(item => item.userId === user.id)
     : undefined;
-  const passwordHash = hashLocalPassword(normalizedUsername, password);
+  const isVerified =
+    user && credential
+      ? verifyLocalPasswordHash(normalizedUsername, password, credential.passwordHash)
+      : false;
 
-  if (!user || !credential || credential.passwordHash !== passwordHash) {
+  if (!user || !credential || !isVerified) {
     throw new Error('账本账号或解锁口令错误');
   }
+
+  const now = nowString();
+  const nextAuthCredentials = shouldUpgradeLocalPasswordHash(credential.passwordHash)
+    ? data.authCredentials.map(item =>
+        item.userId === user.id
+          ? {
+              ...item,
+              passwordHash: createLocalPasswordHash(normalizedUsername, password),
+              updatedAt: now,
+            }
+          : item,
+      )
+    : data.authCredentials;
 
   return ensureUserDemoData(
     {
       ...data,
       currentUserId: user.id,
+      authCredentials: nextAuthCredentials,
     },
     user.id,
   );
@@ -714,6 +878,9 @@ export function replaceCategoryAndDelete(
   const toCategory = data.categories.find(category => category.id === toCategoryId);
   if (!toCategory) {
     throw new Error('迁移目标分类不存在');
+  }
+  if (toCategory.userId !== null && toCategory.userId !== userId) {
+    throw new Error('迁移目标分类不可用');
   }
   if (toCategory.type !== fromCategory.type) {
     throw new Error('迁移目标分类类型不一致');
@@ -1168,6 +1335,13 @@ export function saveBill(
   };
 
   if (billId) {
+    const existingBill = normalizedData.bills.find(
+      bill => bill.id === billId && bill.userId === userId && !bill.deleted,
+    );
+    if (!existingBill) {
+      throw new Error('账单不存在或已删除');
+    }
+
     return recalculateUserAccountBalances(
       {
         ...normalizedData,
@@ -1207,6 +1381,12 @@ export function deleteBill(
   const userId = ensureCurrentUserId(currentUserId);
   const normalizedData = ensureUserAccountDomainData(data, userId);
   const now = nowString();
+  const existingBill = normalizedData.bills.find(
+    bill => bill.id === billId && bill.userId === userId && !bill.deleted,
+  );
+  if (!existingBill) {
+    throw new Error('账单不存在或已删除');
+  }
 
   return recalculateUserAccountBalances(
     {

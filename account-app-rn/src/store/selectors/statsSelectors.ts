@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import {useMemo} from 'react';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
+import {getBudgetSummary, PersistedAppData} from '@/services/localAppService';
 import {BudgetSummary, OverviewStats} from '@/types/bill';
 import {useRealBills} from './billSelectors';
 
@@ -50,13 +51,25 @@ export function useMonthlyOverview(month: string): OverviewStats {
 }
 
 export function useBudgetSummary(month: string): BudgetSummary {
+  const schemaVersion = useAppStore(state => state.schemaVersion);
+  const categories = useAppStore(state => state.categories);
+  const accounts = useAppStore(state => state.accounts);
   const bills = useAppStore(state => state.bills);
   const budgets = useAppStore(state => state.budgets);
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const getBudgetByMonth = useAppStore(state => state.getBudgetByMonth);
 
-  return useMemo(
-    () => getBudgetByMonth(month),
-    [getBudgetByMonth, month, bills, budgets, currentUserId],
-  );
+  return useMemo(() => {
+    const data: PersistedAppData = {
+      schemaVersion,
+      categories,
+      accounts,
+      bills,
+      budgets,
+      users: [],
+      authCredentials: [],
+      currentUserId,
+    };
+
+    return getBudgetSummary(data, currentUserId, month);
+  }, [month, schemaVersion, categories, accounts, bills, budgets, currentUserId]);
 }

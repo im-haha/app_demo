@@ -11,19 +11,20 @@ export default function SecureInputWarmup(): React.JSX.Element | null {
       return;
     }
 
+    const input = inputRef.current;
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       if (cancelled || hasWarmedSecureInput) {
         return;
       }
 
-      inputRef.current?.focus();
+      input?.focus();
 
       requestAnimationFrame(() => {
         if (cancelled) {
           return;
         }
-        inputRef.current?.blur();
+        input?.blur();
         hasWarmedSecureInput = true;
       });
     });
@@ -31,7 +32,7 @@ export default function SecureInputWarmup(): React.JSX.Element | null {
     return () => {
       cancelled = true;
       task.cancel();
-      inputRef.current?.blur();
+      input?.blur();
     };
   }, []);
 

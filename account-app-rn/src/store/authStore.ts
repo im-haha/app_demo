@@ -5,10 +5,12 @@ import {createJSONStorage, persist} from 'zustand/middleware';
 import {reportHandledError} from '@/lib/reportError';
 import {LoginPayload, RegisterPayload, UserProfile} from '@/types/user';
 import {
+  createLocalPasswordHash,
   LocalAuthCredential,
-  hashLocalPassword,
   normalizePersistedAppData,
   normalizeUsername,
+  shouldUpgradeLocalPasswordHash,
+  verifyLocalPasswordHash,
 } from '@/services/localAppService';
 import {storageKeys} from '@/utils/storage';
 
@@ -90,7 +92,7 @@ export const useAuthStore = create<AuthState>()(
           };
           const credential: LocalAuthCredential = {
             userId: user.id,
-            passwordHash: hashLocalPassword(username, payload.password),
+            passwordHash: createLocalPasswordHash(username, payload.password),
             updatedAt: now,
           };
 
@@ -123,13 +125,35 @@ export const useAuthStore = create<AuthState>()(
           const credential = user
             ? state.authCredentials.find(item => item.userId === user.id)
             : undefined;
-          const passwordHash = hashLocalPassword(username, payload.password);
+          const isVerified =
+            user && credential
+              ? verifyLocalPasswordHash(username, payload.password, credential.passwordHash)
+              : false;
 
-          if (!user || !credential || credential.passwordHash !== passwordHash) {
+          if (!user || !credential || !isVerified) {
             throw new Error('账本账号或解锁口令错误');
           }
 
-          set(current => ({...current, currentUserId: user.id}));
+          set(current => {
+            if (!shouldUpgradeLocalPasswordHash(credential.passwordHash)) {
+              return {...current, currentUserId: user.id};
+            }
+
+            const upgradedAt = nowString();
+            return {
+              ...current,
+              currentUserId: user.id,
+              authCredentials: current.authCredentials.map(item =>
+                item.userId === user.id
+                  ? {
+                      ...item,
+                      passwordHash: createLocalPasswordHash(username, payload.password),
+                      updatedAt: upgradedAt,
+                    }
+                  : item,
+              ),
+            };
+          });
           return user;
         } catch (error) {
           if (shouldReportAuthError(error)) {

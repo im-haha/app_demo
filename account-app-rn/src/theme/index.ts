@@ -4,6 +4,7 @@ import {MD3DarkTheme, MD3LightTheme, MD3Theme} from 'react-native-paper';
 import {useThemeStore} from '@/store/themeStore';
 import {ResolvedThemeMode, ThemePreference} from '@/types/theme';
 import {AppColors, colors as defaultColors, darkColors, lightColors} from './colors';
+import {AppThemeTokens, buildThemeTokens} from './tokens';
 
 export function resolveThemeMode(
   preference: ThemePreference,
@@ -20,6 +21,10 @@ export function resolveThemeMode(
 
 export function getThemeColors(mode: ResolvedThemeMode): AppColors {
   return mode === 'dark' ? darkColors : lightColors;
+}
+
+export function getThemeTokens(mode: ResolvedThemeMode): AppThemeTokens {
+  return buildThemeTokens(mode, getThemeColors(mode));
 }
 
 function getSurfaceVariant(mode: ResolvedThemeMode): string {
@@ -79,6 +84,11 @@ export function useResolvedThemeMode(): ResolvedThemeMode {
 export function useThemeColors(): AppColors {
   const mode = useResolvedThemeMode();
   return getThemeColors(mode);
+}
+
+export function useThemeTokens(): AppThemeTokens {
+  const mode = useResolvedThemeMode();
+  return getThemeTokens(mode);
 }
 
 export {defaultColors as colors};

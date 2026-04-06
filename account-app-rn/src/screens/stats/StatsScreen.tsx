@@ -17,7 +17,7 @@ import {
   FilterSummaryChips,
   TimePresetBar,
 } from '@/components/filters';
-import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors, useThemeTokens} from '@/theme';
 import {getStatsChartTheme} from '@/components/stats/chart/statsChartTheme';
 import {segmentedSwitchHaptic} from '@/utils/haptics';
 import {CommonTimePreset, resolveTimeRange, statsTimePresetOptions} from '@/utils/timeRange';
@@ -27,6 +27,7 @@ type StatsType = 'INCOME' | 'EXPENSE';
 export default function StatsScreen(): React.JSX.Element {
   const useXLChart = true;
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
   const chartTheme = getStatsChartTheme(resolvedThemeMode);
@@ -39,6 +40,8 @@ export default function StatsScreen(): React.JSX.Element {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<number | 'ALL'>('ALL');
   const [includeTransfers, setIncludeTransfers] = useState(false);
+  const [advancedVisible, setAdvancedVisible] = useState(false);
+  const [primaryDimension, setPrimaryDimension] = useState<'CATEGORY' | 'ACCOUNT'>('CATEGORY');
   const [switchWidth, setSwitchWidth] = useState(0);
   const typeSwitchAnim = useRef(
     new Animated.Value(type === 'EXPENSE' ? 0 : 1),
@@ -201,6 +204,7 @@ export default function StatsScreen(): React.JSX.Element {
     setSelectedCategoryId(null);
     setSelectedAccountId('ALL');
     setIncludeTransfers(false);
+    setAdvancedVisible(false);
   }
 
   return (
@@ -229,6 +233,7 @@ export default function StatsScreen(): React.JSX.Element {
               value={timePreset}
               options={statsTimePresetOptions}
               onChange={setTimePreset}
+              containerStyle={{flex: 1, minWidth: 0}}
               chipStyle={[
                 styles.filterChip,
                 {
@@ -238,33 +243,147 @@ export default function StatsScreen(): React.JSX.Element {
               ]}
               textStyle={{fontWeight: '600', color: colors.text}}
             />
-            <CategoryFilterMenu
-              selectedCategoryId={selectedCategoryId}
-              categories={visibleCategories}
-              onChange={setSelectedCategoryId}
-              chipStyle={[
-                styles.filterChip,
-                {
-                  borderColor: chartTheme.panelBorder,
-                  backgroundColor: chartTheme.panelMutedFill,
-                },
-              ]}
-              textStyle={{fontWeight: '600', color: colors.text}}
-            />
-            <AccountFilterMenu
-              accounts={visibleAccounts}
-              selectedAccountId={selectedAccountId}
-              onChange={setSelectedAccountId}
-              chipStyle={[
-                styles.filterChip,
-                {
-                  borderColor: chartTheme.panelBorder,
-                  backgroundColor: chartTheme.panelMutedFill,
-                },
-              ]}
-              textStyle={{fontWeight: '600', color: colors.text}}
-            />
+            {primaryDimension === 'CATEGORY' ? (
+              <CategoryFilterMenu
+                selectedCategoryId={selectedCategoryId}
+                categories={visibleCategories}
+                onChange={setSelectedCategoryId}
+                containerStyle={{flex: 1, minWidth: 0}}
+                chipStyle={[
+                  styles.filterChip,
+                  {
+                    borderColor: chartTheme.panelBorder,
+                    backgroundColor: chartTheme.panelMutedFill,
+                  },
+                ]}
+                textStyle={{fontWeight: '600', color: colors.text}}
+              />
+            ) : (
+              <AccountFilterMenu
+                accounts={visibleAccounts}
+                selectedAccountId={selectedAccountId}
+                onChange={setSelectedAccountId}
+                containerStyle={{flex: 1, minWidth: 0}}
+                chipStyle={[
+                  styles.filterChip,
+                  {
+                    borderColor: chartTheme.panelBorder,
+                    backgroundColor: chartTheme.panelMutedFill,
+                  },
+                ]}
+                textStyle={{fontWeight: '600', color: colors.text}}
+              />
+            )}
           </View>
+          <View style={{flexDirection: 'row', gap: 8}}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={primaryDimension === 'CATEGORY' ? '切换到账户筛选' : '切换到分类筛选'}
+              onPress={() =>
+                setPrimaryDimension(current => (current === 'CATEGORY' ? 'ACCOUNT' : 'CATEGORY'))
+              }
+              style={({pressed}) => ({
+                minHeight: tokens.size.touchMin,
+                borderRadius: tokens.radius.md,
+                borderWidth: 1,
+                borderColor: chartTheme.panelBorder,
+                backgroundColor: pressed ? tokens.interactive.pressed : chartTheme.panelMutedFill,
+                paddingHorizontal: 12,
+                justifyContent: 'center',
+                flex: 1,
+              })}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                {primaryDimension === 'CATEGORY' ? '切换到账户筛选' : '切换到分类筛选'}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={advancedVisible ? '收起更多筛选' : '展开更多筛选'}
+              accessibilityState={{expanded: advancedVisible}}
+              onPress={() => setAdvancedVisible(current => !current)}
+              style={({pressed}) => ({
+                minHeight: tokens.size.touchMin,
+                borderRadius: tokens.radius.md,
+                borderWidth: 1,
+                borderColor: chartTheme.panelBorder,
+                backgroundColor: pressed ? tokens.interactive.pressed : chartTheme.panelMutedFill,
+                paddingHorizontal: 12,
+                justifyContent: 'center',
+                flex: 1,
+              })}>
+              <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                {advancedVisible ? '收起更多筛选' : '展开更多筛选'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {advancedVisible ? (
+            <View
+              style={{
+                borderRadius: tokens.radius.lg,
+                borderWidth: 1,
+                borderColor: chartTheme.panelBorder,
+                backgroundColor: chartTheme.panelMutedFill,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                gap: 10,
+              }}>
+              {primaryDimension === 'CATEGORY' ? (
+                <AccountFilterMenu
+                  accounts={visibleAccounts}
+                  selectedAccountId={selectedAccountId}
+                  onChange={setSelectedAccountId}
+                  containerStyle={{width: '100%', minWidth: 0}}
+                  chipStyle={[
+                    styles.filterChip,
+                    {
+                      borderColor: chartTheme.panelBorder,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                  textStyle={{fontWeight: '600', color: colors.text}}
+                />
+              ) : (
+                <CategoryFilterMenu
+                  selectedCategoryId={selectedCategoryId}
+                  categories={visibleCategories}
+                  onChange={setSelectedCategoryId}
+                  containerStyle={{width: '100%', minWidth: 0}}
+                  chipStyle={[
+                    styles.filterChip,
+                    {
+                      borderColor: chartTheme.panelBorder,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                  textStyle={{fontWeight: '600', color: colors.text}}
+                />
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="切换是否计入转账"
+                accessibilityState={{selected: includeTransfers}}
+                onPress={() => setIncludeTransfers(current => !current)}
+                style={[
+                  styles.filterChip,
+                  {
+                    borderColor: chartTheme.panelBorder,
+                    backgroundColor: includeTransfers
+                      ? isDark
+                        ? 'rgba(73,116,98,0.32)'
+                        : 'rgba(29,138,108,0.14)'
+                      : colors.surface,
+                    alignSelf: 'flex-start',
+                    flex: undefined,
+                    minWidth: 132,
+                  },
+                ]}>
+                <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
+                  {includeTransfers ? '已计入转账' : '默认排除转账'}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {timePreset === 'CUSTOM' ? (
             <DateRangeFields
@@ -300,12 +419,16 @@ export default function StatsScreen(): React.JSX.Element {
               }}
             />
             <Pressable
-              style={{
+              accessibilityRole="button"
+              accessibilityLabel="切换为支出视角"
+              accessibilityState={{selected: type === 'EXPENSE'}}
+              style={({pressed}) => ({
                 flex: 1,
                 justifyContent: 'center',
                 alignItems: 'center',
                 zIndex: 1,
-              }}
+                opacity: pressed ? 0.88 : 1,
+              })}
               onPress={() => handleTypeChange('EXPENSE')}>
               <Text
                 variant="titleMedium"
@@ -317,12 +440,16 @@ export default function StatsScreen(): React.JSX.Element {
               </Text>
             </Pressable>
             <Pressable
-              style={{
+              accessibilityRole="button"
+              accessibilityLabel="切换为收入视角"
+              accessibilityState={{selected: type === 'INCOME'}}
+              style={({pressed}) => ({
                 flex: 1,
                 justifyContent: 'center',
                 alignItems: 'center',
                 zIndex: 1,
-              }}
+                opacity: pressed ? 0.88 : 1,
+              })}
               onPress={() => handleTypeChange('INCOME')}>
               <Text
                 variant="titleMedium"
@@ -344,26 +471,6 @@ export default function StatsScreen(): React.JSX.Element {
             summaryTextStyle={{color: colors.muted}}
             clearTextStyle={{color: colors.primary}}
           />
-          <Pressable
-            onPress={() => setIncludeTransfers(current => !current)}
-            style={[
-              styles.filterChip,
-              {
-                borderColor: chartTheme.panelBorder,
-                backgroundColor: includeTransfers
-                  ? isDark
-                    ? 'rgba(73,116,98,0.32)'
-                    : 'rgba(29,138,108,0.14)'
-                  : chartTheme.panelMutedFill,
-                alignSelf: 'flex-start',
-                flex: undefined,
-                minWidth: 110,
-              },
-            ]}>
-            <Text variant="labelLarge" style={{fontWeight: '700', color: colors.text}}>
-              {includeTransfers ? '已计入转账' : '默认排除转账'}
-            </Text>
-          </Pressable>
         </View>
         <ScrollView
           bounces={false}
@@ -424,8 +531,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   filterChip: {
-    flex: 1,
-    height: 38,
+    minHeight: 44,
     borderRadius: 999,
     paddingHorizontal: 12,
     justifyContent: 'center',

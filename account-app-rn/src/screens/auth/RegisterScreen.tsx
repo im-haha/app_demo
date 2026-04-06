@@ -45,6 +45,9 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const confirmPasswordFilled = form.confirmPassword.trim().length > 0;
+  const passwordMatched =
+    confirmPasswordFilled && form.password.trim().length > 0 && form.password === form.confirmPassword;
 
   const handleNicknameChange = useCallback((nickname: string) => {
     setForm(current => (current.nickname === nickname ? current : {...current, nickname}));
@@ -157,6 +160,7 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               textContentType="none"
               importantForAutofill="no"
               errorText={errors.password}
+              helperText="建议 8-20 位，至少包含字母与数字。"
             />
             <AppInput
               label="确认口令"
@@ -166,12 +170,17 @@ export default function RegisterScreen({navigation}: Props): React.JSX.Element {
               autoComplete="off"
               textContentType="none"
               importantForAutofill="no"
-              errorText={errors.confirmPassword}
+              errorText={
+                errors.confirmPassword || (confirmPasswordFilled && !passwordMatched
+                  ? '两次输入的口令不一致'
+                  : undefined)
+              }
+              successText={passwordMatched ? '两次口令一致' : undefined}
             />
-            <AppButton onPress={handleSubmitPress} loading={loading} disabled={loading}>
+            <AppButton size="lg" onPress={handleSubmitPress} loading={loading} disabled={loading}>
               创建并解锁账本
             </AppButton>
-            <AppButton mode="text" onPress={handleGoBackPress} disabled={loading}>
+            <AppButton tone="text" size="sm" onPress={handleGoBackPress} disabled={loading}>
               返回解锁页面
             </AppButton>
           </Card.Content>

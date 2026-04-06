@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import React, {useCallback, useMemo} from 'react';
 import {Alert, ScrollView, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {Button, Card, Text} from 'react-native-paper';
@@ -93,6 +93,15 @@ export default function BillDetailScreen({
     bill.transferTargetAccountId,
   );
 
+  const handleEdit = useCallback(() => {
+    try {
+      navigation.push('BillEdit', {billId});
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '请稍后重试';
+      Alert.alert('无法打开编辑页', message);
+    }
+  }, [billId, navigation]);
+
   function handleDelete() {
     Alert.alert('删除账单', '删除后不可恢复，是否继续？', [
       {text: '取消', style: 'cancel'},
@@ -172,9 +181,11 @@ export default function BillDetailScreen({
 
         <View style={{flexDirection: 'row', gap: 12}}>
           <Button
-            mode="contained-tonal"
+            mode="contained"
+            buttonColor={colors.primary}
+            textColor="#FFFFFF"
             style={{flex: 1}}
-            onPress={() => navigation.navigate('BillEdit', {billId})}>
+            onPress={handleEdit}>
             编辑
           </Button>
           <Button

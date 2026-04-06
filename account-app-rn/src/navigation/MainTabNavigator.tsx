@@ -1,11 +1,5 @@
-import React, {useEffect, useRef} from 'react';
-import {
-  Animated,
-  Easing,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
+import React, {useEffect, useMemo, useRef} from 'react';
+import {Animated, Easing, Pressable, StyleSheet, ViewStyle} from 'react-native';
 import {
   BottomTabBarButtonProps,
   createBottomTabNavigator,
@@ -15,10 +9,33 @@ import BillListScreen from '@/screens/bill/BillListScreen';
 import StatsScreen from '@/screens/stats/StatsScreen';
 import MineScreen from '@/screens/mine/MineScreen';
 import {MainTabParamList} from './types';
-import {useThemeColors} from '@/theme';
+import {useThemeColors, useThemeTokens} from '@/theme';
 import {tabSwitchHaptic} from '@/utils/haptics';
+import TabNavIcon, {TabIconKind} from '@/components/common/icons/TabNavIcon';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+
+const TAB_ICON_MAP: Record<
+  keyof MainTabParamList,
+  {kind: TabIconKind; accessibilityLabel: string}
+> = {
+  Home: {
+    kind: 'home',
+    accessibilityLabel: '首页标签',
+  },
+  Bills: {
+    kind: 'bills',
+    accessibilityLabel: '账单标签',
+  },
+  Stats: {
+    kind: 'stats',
+    accessibilityLabel: '统计标签',
+  },
+  Mine: {
+    kind: 'mine',
+    accessibilityLabel: '我的标签',
+  },
+};
 
 function HapticTabButton({
   accessibilityLabel,
@@ -38,7 +55,7 @@ function HapticTabButton({
       testID={testID}
       onLayout={onLayout}
       onLongPress={onLongPress}
-      style={style}
+      style={({pressed}) => [style as ViewStyle, pressed ? styles.tabPressed : null]}
       onPress={event => {
         tabSwitchHaptic();
         onPress?.(event);
@@ -62,7 +79,7 @@ function TabLabel({
   useEffect(() => {
     Animated.timing(anim, {
       toValue: focused ? 1 : 0,
-      duration: 220,
+      duration: 210,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -70,26 +87,22 @@ function TabLabel({
 
   const scale = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.95, 1.08],
-  });
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -1],
+    outputRange: [0.95, 1.05],
   });
   const opacity = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.72, 1],
+    outputRange: [0.78, 1],
   });
 
   return (
     <Animated.Text
       style={{
         color,
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: focused ? '700' : '600',
         marginBottom: 2,
         opacity,
-        transform: [{translateY}, {scale}],
+        transform: [{scale}],
       }}>
       {text}
     </Animated.Text>
@@ -108,6 +121,7 @@ function TabIcon({
   haloColor: string;
 }): React.JSX.Element {
   const focusAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const iconKind = TAB_ICON_MAP[routeName].kind;
 
   useEffect(() => {
     Animated.timing(focusAnim, {
@@ -120,7 +134,7 @@ function TabIcon({
 
   const iconScale = focusAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.95, 1.06],
+    outputRange: [0.94, 1.06],
   });
   const iconTranslateY = focusAnim.interpolate({
     inputRange: [0, 1],
@@ -130,40 +144,6 @@ function TabIcon({
     inputRange: [0, 1],
     outputRange: [0.7, 1],
   });
-
-  let glyph: React.JSX.Element;
-  if (routeName === 'Home') {
-    glyph = (
-      <>
-        <View style={[styles.houseRoof, {borderBottomColor: color}]} />
-        <View style={[styles.houseBody, {borderColor: color}]} />
-      </>
-    );
-  } else if (routeName === 'Bills') {
-    glyph = (
-      <>
-        <View style={[styles.docBody, {borderColor: color}]} />
-        <View style={[styles.docLineTop, {backgroundColor: color}]} />
-        <View style={[styles.docLineMiddle, {backgroundColor: color}]} />
-        <View style={[styles.docLineBottom, {backgroundColor: color}]} />
-      </>
-    );
-  } else if (routeName === 'Stats') {
-    glyph = (
-      <View style={styles.chartWrap}>
-        <View style={[styles.chartBarSmall, {backgroundColor: color}]} />
-        <View style={[styles.chartBarMedium, {backgroundColor: color}]} />
-        <View style={[styles.chartBarLarge, {backgroundColor: color}]} />
-      </View>
-    );
-  } else {
-    glyph = (
-      <>
-        <View style={[styles.userHead, {borderColor: color}]} />
-        <View style={[styles.userShoulder, {borderColor: color}]} />
-      </>
-    );
-  }
 
   return (
     <Animated.View style={{transform: [{translateY: iconTranslateY}]}}>
@@ -179,7 +159,7 @@ function TabIcon({
         ]}
       />
       <Animated.View style={[styles.iconBox, {transform: [{scale: iconScale}]}]}>
-        {glyph}
+        <TabNavIcon kind={iconKind} color={color} focused={focused} size={23} />
       </Animated.View>
     </Animated.View>
   );
@@ -187,6 +167,17 @@ function TabIcon({
 
 export default function MainTabNavigator(): React.JSX.Element {
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
+  const tabBarStyle = useMemo(
+    () => ({
+      backgroundColor: colors.surface,
+      borderTopColor: tokens.borderTone.default,
+      height: 78,
+      paddingTop: 9,
+      paddingBottom: 8,
+    }),
+    [colors.surface, tokens.borderTone.default],
+  );
 
   return (
     <Tab.Navigator
@@ -194,13 +185,7 @@ export default function MainTabNavigator(): React.JSX.Element {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 76,
-          paddingTop: 9,
-          paddingBottom: 8,
-        },
+        tabBarStyle,
         tabBarButton: props => <HapticTabButton {...props} />,
         tabBarLabel: ({color, focused, children}) => (
           <TabLabel color={color} focused={focused} text={String(children ?? '')} />
@@ -217,10 +202,26 @@ export default function MainTabNavigator(): React.JSX.Element {
           />
         ),
       })}>
-      <Tab.Screen name="Home" component={HomeScreen} options={{title: '首页'}} />
-      <Tab.Screen name="Bills" component={BillListScreen} options={{title: '账单'}} />
-      <Tab.Screen name="Stats" component={StatsScreen} options={{title: '统计'}} />
-      <Tab.Screen name="Mine" component={MineScreen} options={{title: '我的'}} />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{title: '首页', tabBarAccessibilityLabel: TAB_ICON_MAP.Home.accessibilityLabel}}
+      />
+      <Tab.Screen
+        name="Bills"
+        component={BillListScreen}
+        options={{title: '账单', tabBarAccessibilityLabel: TAB_ICON_MAP.Bills.accessibilityLabel}}
+      />
+      <Tab.Screen
+        name="Stats"
+        component={StatsScreen}
+        options={{title: '统计', tabBarAccessibilityLabel: TAB_ICON_MAP.Stats.accessibilityLabel}}
+      />
+      <Tab.Screen
+        name="Mine"
+        component={MineScreen}
+        options={{title: '我的', tabBarAccessibilityLabel: TAB_ICON_MAP.Mine.accessibilityLabel}}
+      />
     </Tab.Navigator>
   );
 }
@@ -228,7 +229,7 @@ export default function MainTabNavigator(): React.JSX.Element {
 const styles = StyleSheet.create({
   activeHalo: {
     position: 'absolute',
-    top: -3,
+    top: -4,
     left: -8,
     right: -8,
     bottom: -2,
@@ -241,96 +242,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 1,
   },
-  houseRoof: {
-    position: 'absolute',
-    top: 3,
-    width: 0,
-    height: 0,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderLeftWidth: 7,
-    borderRightWidth: 7,
-    borderBottomWidth: 6,
-  },
-  houseBody: {
-    position: 'absolute',
-    top: 9,
-    width: 14,
-    height: 10,
-    borderWidth: 1.8,
-    borderRadius: 2.5,
-    backgroundColor: 'transparent',
-  },
-  docBody: {
-    position: 'absolute',
-    top: 4,
-    width: 14,
-    height: 16,
-    borderWidth: 1.8,
-    borderRadius: 2.5,
-    backgroundColor: 'transparent',
-  },
-  docLineTop: {
-    position: 'absolute',
-    top: 8,
-    width: 7,
-    height: 1.6,
-    borderRadius: 1,
-  },
-  docLineMiddle: {
-    position: 'absolute',
-    top: 11.5,
-    width: 7,
-    height: 1.6,
-    borderRadius: 1,
-  },
-  docLineBottom: {
-    position: 'absolute',
-    top: 15,
-    width: 7,
-    height: 1.6,
-    borderRadius: 1,
-  },
-  chartWrap: {
-    width: 15,
-    height: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  chartBarSmall: {
-    width: 3.2,
-    height: 5,
-    borderRadius: 1,
-  },
-  chartBarMedium: {
-    width: 3.2,
-    height: 9,
-    borderRadius: 1,
-  },
-  chartBarLarge: {
-    width: 3.2,
-    height: 12,
-    borderRadius: 1,
-  },
-  userHead: {
-    position: 'absolute',
-    top: 3,
-    width: 7.5,
-    height: 7.5,
-    borderWidth: 1.8,
-    borderRadius: 999,
-    backgroundColor: 'transparent',
-  },
-  userShoulder: {
-    position: 'absolute',
-    top: 13,
-    width: 14.5,
-    height: 7.5,
-    borderWidth: 1.8,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    backgroundColor: 'transparent',
+  tabPressed: {
+    opacity: 0.88,
   },
 });

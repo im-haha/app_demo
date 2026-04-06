@@ -2,7 +2,7 @@ import React from 'react';
 import {Pressable, View} from 'react-native';
 import {Card, Text} from 'react-native-paper';
 import {BillRecord, Category} from '@/types/bill';
-import {useResolvedThemeMode, useThemeColors} from '@/theme';
+import {useResolvedThemeMode, useThemeColors, useThemeTokens} from '@/theme';
 import {formatCurrency, formatDateTime} from '@/utils/format';
 import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 
@@ -24,6 +24,7 @@ export default function BillCard({
   onPress,
 }: Props): React.JSX.Element {
   const colors = useThemeColors();
+  const tokens = useThemeTokens();
   const resolvedThemeMode = useResolvedThemeMode();
   const isDark = resolvedThemeMode === 'dark';
   const isTransfer = Boolean(bill.isTransfer);
@@ -59,13 +60,21 @@ export default function BillCard({
       : '-';
 
   return (
-    <Pressable onPress={onPress} style={{borderRadius: 22}}>
+    <Pressable
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={`${title}，${formatCurrency(bill.amount)}`}
+      onPress={onPress}
+      style={({pressed}) => ({
+        borderRadius: tokens.radius.xl,
+        opacity: pressed ? 0.9 : 1,
+      })}>
       <Card
         mode="contained"
         style={{
           backgroundColor: colors.surface,
-          borderRadius: 22,
+          borderRadius: tokens.radius.xl,
           overflow: 'hidden',
+          ...tokens.shadow.card,
         }}>
         <Card.Content
           style={{
@@ -81,7 +90,7 @@ export default function BillCard({
             iconSize={20}
           />
           <View style={{flex: 1, gap: 4}}>
-            <Text variant="titleMedium" style={{color: colors.text, fontWeight: '700'}}>
+            <Text numberOfLines={1} variant="titleMedium" style={{color: colors.text, fontWeight: '700'}}>
               {title}
             </Text>
             {isTransfer ? (
@@ -94,12 +103,12 @@ export default function BillCard({
                   }}>
                   {transferDirectionLabel}
                 </Text>
-                <Text variant="bodyMedium" style={{color: subTextColor, flexShrink: 1}}>
+                <Text numberOfLines={1} variant="bodyMedium" style={{color: subTextColor, flexShrink: 1}}>
                   {subtitle}
                 </Text>
               </View>
             ) : (
-              <Text variant="bodyMedium" style={{color: subTextColor}}>
+              <Text numberOfLines={1} variant="bodyMedium" style={{color: subTextColor}}>
                 {subtitle}
               </Text>
             )}
@@ -111,7 +120,7 @@ export default function BillCard({
               {amountPrefix}
               {formatCurrency(bill.amount)}
             </Text>
-            <Text variant="bodyMedium" style={{color: timeTextColor}}>
+            <Text numberOfLines={1} variant="bodyMedium" style={{color: timeTextColor}}>
               {formatDateTime(bill.billTime)}
             </Text>
           </View>

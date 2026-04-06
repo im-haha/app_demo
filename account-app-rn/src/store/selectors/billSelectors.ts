@@ -33,11 +33,10 @@ export function useRealBills(filters?: BillFilters): BillRecord[] {
   const currentUserId = useAuthStore(state => state.currentUserId);
   const getBills = useAppStore(state => state.getBills);
   const filtersKey = buildFiltersKey(filters);
-  const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;
 
   return useMemo(
-    () => (revisionKey ? getBills(filters) : getBills(filters)),
-    [getBills, filters, revisionKey],
+    () => getBills(filters),
+    [getBills, filters, filtersKey, bills, categories, currentUserId],
   );
 }
 
@@ -52,10 +51,9 @@ export function useBillSections(filters?: BillFilters): BillListSection[] {
   const currentUserId = useAuthStore(state => state.currentUserId);
   const getBillSections = useAppStore(state => state.getBillSections);
   const filtersKey = buildFiltersKey(filters);
-  const revisionKey = `${bills.length}-${categories.length}-${currentUserId ?? 'none'}-${filtersKey}`;
 
   return useMemo(
-    () => (revisionKey ? getBillSections(filters) : getBillSections(filters)),
-    [getBillSections, filters, revisionKey],
+    () => getBillSections(filters),
+    [getBillSections, filters, filtersKey, bills, categories, currentUserId],
   );
 }

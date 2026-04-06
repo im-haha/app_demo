@@ -4,16 +4,16 @@ import {
   BottomTabBarButtonProps,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
-import HomeScreen from '@/screens/home/HomeScreen';
-import BillListScreen from '@/screens/bill/BillListScreen';
-import StatsScreen from '@/screens/stats/StatsScreen';
-import MineScreen from '@/screens/mine/MineScreen';
 import {MainTabParamList} from './types';
 import {useThemeColors, useThemeTokens} from '@/theme';
 import {tabSwitchHaptic} from '@/utils/haptics';
 import TabNavIcon, {TabIconKind} from '@/components/common/icons/TabNavIcon';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const getHomeScreen = () => require('@/screens/home/HomeScreen').default;
+const getBillListScreen = () => require('@/screens/bill/BillListScreen').default;
+const getStatsScreen = () => require('@/screens/stats/StatsScreen').default;
+const getMineScreen = () => require('@/screens/mine/MineScreen').default;
 
 const TAB_ICON_MAP: Record<
   keyof MainTabParamList,
@@ -206,22 +206,22 @@ export default function MainTabNavigator(): React.JSX.Element {
       })}>
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        getComponent={getHomeScreen}
         options={{title: '首页', tabBarAccessibilityLabel: TAB_ICON_MAP.Home.accessibilityLabel}}
       />
       <Tab.Screen
         name="Bills"
-        component={BillListScreen}
+        getComponent={getBillListScreen}
         options={{title: '账单', tabBarAccessibilityLabel: TAB_ICON_MAP.Bills.accessibilityLabel}}
       />
       <Tab.Screen
         name="Stats"
-        component={StatsScreen}
+        getComponent={getStatsScreen}
         options={{title: '统计', tabBarAccessibilityLabel: TAB_ICON_MAP.Stats.accessibilityLabel}}
       />
       <Tab.Screen
         name="Mine"
-        component={MineScreen}
+        getComponent={getMineScreen}
         options={{title: '我的', tabBarAccessibilityLabel: TAB_ICON_MAP.Mine.accessibilityLabel}}
       />
     </Tab.Navigator>

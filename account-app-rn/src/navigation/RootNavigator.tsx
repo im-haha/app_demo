@@ -3,17 +3,6 @@ import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {View} from 'react-native';
 import {ActivityIndicator, Text} from 'react-native-paper';
-import AuthNavigator from './AuthNavigator';
-import MainTabNavigator from './MainTabNavigator';
-import BillAddScreen from '@/screens/bill/BillAddScreen';
-import BillDetailScreen from '@/screens/bill/BillDetailScreen';
-import BillEditScreen from '@/screens/bill/BillEditScreen';
-import BudgetScreen from '@/screens/budget/BudgetScreen';
-import CategoryManageScreen from '@/screens/category/CategoryManageScreen';
-import ProfileScreen from '@/screens/mine/ProfileScreen';
-import AccountListScreen from '@/screens/account/AccountListScreen';
-import AccountEditScreen from '@/screens/account/AccountEditScreen';
-import AccountLedgerScreen from '@/screens/account/AccountLedgerScreen';
 import {RootStackParamList} from './types';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
@@ -21,6 +10,17 @@ import {buildNavigationTheme, useResolvedThemeMode, useThemeColors} from '@/them
 import {APP_NAME} from '@/utils/constants';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const getAuthNavigator = () => require('./AuthNavigator').default;
+const getMainTabNavigator = () => require('./MainTabNavigator').default;
+const getBillAddScreen = () => require('@/screens/bill/BillAddScreen').default;
+const getBillEditScreen = () => require('@/screens/bill/BillEditScreen').default;
+const getBillDetailScreen = () => require('@/screens/bill/BillDetailScreen').default;
+const getBudgetScreen = () => require('@/screens/budget/BudgetScreen').default;
+const getCategoryManageScreen = () => require('@/screens/category/CategoryManageScreen').default;
+const getAccountListScreen = () => require('@/screens/account/AccountListScreen').default;
+const getAccountEditScreen = () => require('@/screens/account/AccountEditScreen').default;
+const getAccountLedgerScreen = () => require('@/screens/account/AccountLedgerScreen').default;
+const getProfileScreen = () => require('@/screens/mine/ProfileScreen').default;
 
 function SplashFallback({colors}: {colors: ReturnType<typeof useThemeColors>}): React.JSX.Element {
   return (
@@ -68,13 +68,13 @@ export default function RootNavigator(): React.JSX.Element {
           <>
             <Stack.Screen
               name="MainTabs"
-              component={MainTabNavigator}
+              getComponent={getMainTabNavigator}
               options={{headerShown: false}}
             />
-            <Stack.Screen name="BillAdd" component={BillAddScreen} options={{title: '新增账单'}} />
+            <Stack.Screen name="BillAdd" getComponent={getBillAddScreen} options={{title: '新增账单'}} />
             <Stack.Screen
               name="BillEdit"
-              component={BillEditScreen}
+              getComponent={getBillEditScreen}
               options={{
                 title: '编辑账单',
                 animation: 'fade',
@@ -83,38 +83,38 @@ export default function RootNavigator(): React.JSX.Element {
             />
             <Stack.Screen
               name="BillDetail"
-              component={BillDetailScreen}
+              getComponent={getBillDetailScreen}
               options={{
                 title: '账单详情',
                 animation: 'fade',
                 headerStyle: {backgroundColor: colors.background},
               }}
             />
-            <Stack.Screen name="Budget" component={BudgetScreen} options={{title: '月预算'}} />
+            <Stack.Screen name="Budget" getComponent={getBudgetScreen} options={{title: '月预算'}} />
             <Stack.Screen
               name="CategoryManage"
-              component={CategoryManageScreen}
+              getComponent={getCategoryManageScreen}
               options={{title: '分类管理'}}
             />
             <Stack.Screen
               name="AccountList"
-              component={AccountListScreen}
+              getComponent={getAccountListScreen}
               options={{title: '账户管理'}}
             />
             <Stack.Screen
               name="AccountEdit"
-              component={AccountEditScreen}
+              getComponent={getAccountEditScreen}
               options={{title: '账户编辑'}}
             />
             <Stack.Screen
               name="AccountLedger"
-              component={AccountLedgerScreen}
+              getComponent={getAccountLedgerScreen}
               options={{title: '账户流水'}}
             />
-            <Stack.Screen name="Profile" component={ProfileScreen} options={{title: '个人资料'}} />
+            <Stack.Screen name="Profile" getComponent={getProfileScreen} options={{title: '个人资料'}} />
           </>
         ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} options={{headerShown: false}} />
+          <Stack.Screen name="Auth" getComponent={getAuthNavigator} options={{headerShown: false}} />
         )}
       </Stack.Navigator>
     </NavigationContainer>

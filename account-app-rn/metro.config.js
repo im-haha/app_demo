@@ -7,7 +7,16 @@ const {withSentryConfig} = require('@sentry/react-native/metro');
  *
  * @type {import('metro-config').MetroConfig}
  */
-const config = {};
+const config = {
+  transformer: {
+    getTransformOptions: async () => ({
+      transform: {
+        experimentalImportSupport: false,
+        inlineRequires: true,
+      },
+    }),
+  },
+};
 
 module.exports = withSentryConfig(
   mergeConfig(getDefaultConfig(__dirname), config),

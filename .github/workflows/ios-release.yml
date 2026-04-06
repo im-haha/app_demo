@@ -50,13 +50,22 @@ jobs:
           cache: npm
           cache-dependency-path: account-app-rn/package-lock.json
 
-      - name: Setup Ruby (Bundler cache)
+      - name: Setup Ruby
         uses: ruby/setup-ruby@v1
-        env:
-          BUNDLE_GEMFILE: account-app-rn/Gemfile
         with:
           ruby-version: "3.2"
-          bundler-cache: true
+          bundler-cache: false
+
+      - name: Install Ruby gems (Bundler 2.x)
+        working-directory: account-app-rn
+        env:
+          BUNDLE_GEMFILE: Gemfile
+        run: |
+          set -eo pipefail
+          BUNDLER_VERSION=2.5.22
+          gem install bundler -v "${BUNDLER_VERSION}" --no-document
+          bundle _${BUNDLER_VERSION}_ config set path vendor/bundle
+          bundle _${BUNDLER_VERSION}_ install --jobs 4 --retry 3
 
       - name: Install JS dependencies
         working-directory: account-app-rn
@@ -66,7 +75,9 @@ jobs:
         working-directory: account-app-rn/ios
         env:
           BUNDLE_GEMFILE: ../Gemfile
-        run: bundle exec pod install --deployment
+        run: |
+          set -eo pipefail
+          bundle _2.5.22_ exec pod install --deployment
 
       - name: Build iPhone simulator release app
         run: |

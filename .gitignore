@@ -3,6 +3,7 @@ dist
 build
 .DS_Store
 *.log
+*.zip
 account-app-rn/node_modules
 account-app-rn/ios/Pods
 account-app-rn/ios/**/*.xcworkspace/xcuserdata/
@@ -18,7 +19,10 @@ account-app-rn/android/sentry.properties
 account-app-rn/ios/sentry.properties
 account-app-rn/android/app/*.keystore
 account-app-rn/android/app/*.jks
+account-app-rn/android/build/
+account-app-rn/android/app/build/
 account-app-rn/android/app/src/main/assets/
+account-app-rn/android/app/src/main/res/raw/
 account-app-rn/android/app/src/main/res/drawable-*/node_modules_*
 account-app-rn/android/app/src/main/res/drawable-*/src_assets_*
 account-app-rn.zip

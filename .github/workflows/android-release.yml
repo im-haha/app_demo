@@ -162,19 +162,26 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_URL: ${{ secrets.SENTRY_URL }}
         run: |
-          if [[ -n "${SENTRY_AUTH_TOKEN}" && -n "${SENTRY_ORG}" && -n "${SENTRY_PROJECT}" ]]; then
-            {
-              echo "defaults.url=${SENTRY_URL:-https://sentry.io/}"
-              echo "auth.token=${SENTRY_AUTH_TOKEN}"
-              echo "defaults.org=${SENTRY_ORG}"
-              echo "defaults.project=${SENTRY_PROJECT}"
-            } > sentry.properties
-            echo "SENTRY_DISABLE_AUTO_UPLOAD=false" >> "${GITHUB_ENV}"
-          else
-            echo "::warning::Sentry secrets are incomplete (require SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT). Disable Sentry upload for this release build."
-            rm -f sentry.properties
-            echo "SENTRY_DISABLE_AUTO_UPLOAD=true" >> "${GITHUB_ENV}"
+          missing=0
+          for var in SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT; do
+            if [[ -z "${!var}" ]]; then
+              echo "::error::缺少仓库 Secret: ${var}"
+              missing=1
+            fi
+          done
+
+          if [[ "${missing}" -ne 0 ]]; then
+            echo "::error::Sentry 上传配置不完整，已终止 release 构建。"
+            exit 1
           fi
+
+          {
+            echo "defaults.url=${SENTRY_URL:-https://sentry.io/}"
+            echo "auth.token=${SENTRY_AUTH_TOKEN}"
+            echo "defaults.org=${SENTRY_ORG}"
+            echo "defaults.project=${SENTRY_PROJECT}"
+          } > sentry.properties
+          echo "SENTRY_DISABLE_AUTO_UPLOAD=false" >> "${GITHUB_ENV}"
 
       - name: Build release APK
         working-directory: account-app-rn/android
@@ -185,9 +192,10 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_URL: ${{ secrets.SENTRY_URL }}
         run: |
+          set -eo pipefail
           chmod +x ./gradlew
-          ./gradlew assembleRelease \
-            --build-cache
+          ./gradlew clean :app:assembleRelease --no-daemon \
+            | tee "${RUNNER_TEMP}/android-assemble-release.log"
 
       - name: Rename APK artifact
         id: artifact
@@ -210,6 +218,21 @@ jobs:
           name: android-apk-${{ steps.meta.outputs.tag }}
           path: ${{ steps.artifact.outputs.path }}
           if-no-files-found: error
+
+      - name: Upload Android debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-files-${{ steps.meta.outputs.tag }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/android-assemble-release.log
+            account-app-rn/android/app/build/generated/sourcemaps/**
+            account-app-rn/android/app/build/intermediates/sourcemaps/**
+            account-app-rn/android/app/build/intermediates/assets/release/*.map
+            account-app-rn/android/app/build/outputs/mapping/**
+            account-app-rn/android/app/build/outputs/native-debug-symbols/**
+            account-app-rn/android/app/build/outputs/logs/**
 
       - name: Generate structured release notes
         if: steps.meta.outputs.has_notes != 'true'

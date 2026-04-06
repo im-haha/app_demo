@@ -388,7 +388,7 @@ jobs:
             echo "- 若未看到 iOS 文件，请检查工作流 \`iOS Release Simulator Artifacts\` 是否执行成功。"
             echo
             echo "### Android"
-            echo "- 通用 APK（推荐）: [accountapp-${RELEASE_TAG}-android.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-android.apk)"
+            echo "- 通用 APK（Phone/Pad，推荐）: [accountapp-${RELEASE_TAG}-android.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/accountapp-${RELEASE_TAG}-android.apk)"
             echo "- 备用入口: [Release 页面](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG})"
             echo
             echo "### Windows"

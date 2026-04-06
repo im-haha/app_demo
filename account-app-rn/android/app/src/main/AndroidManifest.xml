@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <supports-screens
+      android:anyDensity="true"
+      android:smallScreens="true"
+      android:normalScreens="true"
+      android:largeScreens="true"
+      android:xlargeScreens="true" />
 
     <application
       android:name=".MainApplication"
@@ -9,6 +15,7 @@
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
       android:theme="@style/AppTheme"
+      android:resizeableActivity="true"
       android:supportsRtl="true">
       <activity
         android:name=".MainActivity"

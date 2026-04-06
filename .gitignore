@@ -7,6 +7,7 @@ account-app-rn/node_modules
 account-app-rn/ios/Pods
 account-app-rn/ios/**/*.xcworkspace/xcuserdata/
 account-app-rn/ios/**/*.xcodeproj/xcuserdata/
+account-app-rn/ios/vendor-podsrc/
 account-app-rn/ios/main.jsbundle
 account-app-rn/ios/assets/
 account-app-rn/android/.gradle/

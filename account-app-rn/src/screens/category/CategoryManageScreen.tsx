@@ -10,8 +10,8 @@ import {
   SegmentedButtons,
   Text,
 } from 'react-native-paper';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import AppInput from '@/components/common/AppInput';
+import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
 import EmptyState from '@/components/common/EmptyState';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
@@ -23,7 +23,18 @@ import {
 } from '@/api/category';
 import {useThemeColors} from '@/theme';
 
-const iconOptions = ['food-fork-drink', 'shopping', 'car', 'cash', 'gift', 'shape'];
+const iconOptions = [
+  'silverware-fork-knife',
+  'train-car',
+  'shopping',
+  'home-city',
+  'cellphone',
+  'medical-bag',
+  'movie-open-star',
+  'briefcase-variant',
+  'trophy-outline',
+  'plus-circle-outline',
+];
 const colorOptions = ['#D97757', '#1D7874', '#5C7AEA', '#D64D7F', '#2A9D8F', '#6C757D'];
 
 export default function CategoryManageScreen(): React.JSX.Element {
@@ -168,7 +179,13 @@ export default function CategoryManageScreen(): React.JSX.Element {
                       justifyContent: 'center',
                       backgroundColor: `${category.color}20`,
                     }}>
-                    <MaterialCommunityIcons name={category.icon} size={20} color={category.color} />
+                    <BillCategoryIcon
+                      categoryName={category.name}
+                      categoryIcon={category.icon}
+                      withBadge={false}
+                      iconSize={20}
+                      iconColor={category.color}
+                    />
                   </View>
                   <View>
                     <Text variant="titleMedium">{category.name}</Text>
@@ -209,7 +226,14 @@ export default function CategoryManageScreen(): React.JSX.Element {
                   <IconButton
                     key={item}
                     mode={icon === item ? 'contained' : 'outlined'}
-                    icon={item}
+                    icon={() => (
+                      <BillCategoryIcon
+                        categoryIcon={item}
+                        withBadge={false}
+                        iconSize={18}
+                        iconColor={icon === item ? '#FFFFFF' : colors.primary}
+                      />
+                    )}
                     onPress={() => setIcon(item)}
                   />
                 ))}

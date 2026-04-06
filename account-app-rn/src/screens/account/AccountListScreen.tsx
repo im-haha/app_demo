@@ -18,12 +18,15 @@ export default function AccountListScreen({navigation}: Props): React.JSX.Elemen
   const colors = useThemeColors();
   const tokens = useThemeTokens();
   const currentUserId = useAuthStore(state => state.currentUserId);
-  const userAccounts = useAppStore(state =>
-    state.accounts
-      .filter(account => account.userId === currentUserId)
-      .sort((left, right) => left.sortNum - right.sortNum),
-  );
+  const accounts = useAppStore(state => state.accounts);
   const [showArchived, setShowArchived] = useState(false);
+  const userAccounts = useMemo(
+    () =>
+      accounts
+        .filter(account => account.userId === currentUserId)
+        .sort((left, right) => left.sortNum - right.sortNum),
+    [accounts, currentUserId],
+  );
 
   const visibleAccounts = useMemo(
     () =>

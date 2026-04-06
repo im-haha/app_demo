@@ -19,8 +19,6 @@ type SentryEnv = {
 const DEFAULT_SENTRY_DSN =
   'https://b239fbad0418605b7d10e9a169c73d93@o4509377255768064.ingest.us.sentry.io/4511159444439040';
 const DEFAULT_SENTRY_ENVIRONMENT = 'production';
-const DEFAULT_SENTRY_RELEASE = 'com.accountappshell076@1.0.2+3';
-const DEFAULT_SENTRY_DIST = '3';
 
 function getSentryOptionsGlobal(): SentryOptionsGlobal | undefined {
   return (globalThis as {__SENTRY_OPTIONS__?: SentryOptionsGlobal}).__SENTRY_OPTIONS__;
@@ -66,7 +64,7 @@ function resolveSentryEnvironment(): string {
   return DEFAULT_SENTRY_ENVIRONMENT;
 }
 
-function resolveSentryRelease(): string {
+function resolveSentryRelease(): string | undefined {
   const optionsRelease = getSentryOptionsGlobal()?.release;
   if (typeof optionsRelease === 'string' && optionsRelease.trim().length > 0) {
     return optionsRelease.trim();
@@ -77,10 +75,10 @@ function resolveSentryRelease(): string {
     return processEnvRelease.trim();
   }
 
-  return DEFAULT_SENTRY_RELEASE;
+  return undefined;
 }
 
-function resolveSentryDist(): string {
+function resolveSentryDist(): string | undefined {
   const optionsDist = getSentryOptionsGlobal()?.dist;
   if (typeof optionsDist === 'string' && optionsDist.trim().length > 0) {
     return optionsDist.trim();
@@ -91,7 +89,7 @@ function resolveSentryDist(): string {
     return processEnvDist.trim();
   }
 
-  return DEFAULT_SENTRY_DIST;
+  return undefined;
 }
 
 function shouldEnableSmokeTest(): boolean {
@@ -143,16 +141,23 @@ export function initSentry(): void {
 
   isSentryInitialized = true;
 
-  Sentry.init({
+  const options: Sentry.ReactNativeOptions = {
     dsn: SENTRY_DSN || undefined,
     enabled: getSentryEnabled(),
     debug: false,
     environment: SENTRY_ENVIRONMENT,
-    release: SENTRY_RELEASE,
-    dist: SENTRY_DIST,
     tracesSampleRate: 0,
     sendDefaultPii: false,
-  });
+  };
+
+  if (SENTRY_RELEASE) {
+    options.release = SENTRY_RELEASE;
+  }
+  if (SENTRY_DIST) {
+    options.dist = SENTRY_DIST;
+  }
+
+  Sentry.init(options);
 
   scheduleSmokeTestIfNeeded();
 

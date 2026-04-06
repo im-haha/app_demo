@@ -7,13 +7,17 @@ import {
 import CategoryIconBadge from '@/components/category-icons/CategoryIconBadge';
 import {
   BonusIcon,
+  CommunicationIcon,
   EntertainmentIcon,
   FoodIcon,
   HousingIcon,
+  MedicalIcon,
   OtherIcon,
   SalaryIcon,
   ShoppingIcon,
+  StudyIcon,
   TransportIcon,
+  TravelIcon,
 } from '@/components/category-icons/CategoryGlyphs';
 
 type Props = {
@@ -30,9 +34,9 @@ type Props = {
 const CATEGORY_NAME_MAP: Record<string, CategoryIconKey> = {
   餐饮: 'food',
   交通: 'transport',
-  通讯: 'transport',
+  通讯: 'communication',
   出行: 'transport',
-  旅行: 'transport',
+  旅行: 'travel',
   奖金: 'bonus',
   住房: 'housing',
   工资: 'salary',
@@ -41,31 +45,45 @@ const CATEGORY_NAME_MAP: Record<string, CategoryIconKey> = {
   转账: 'bonus',
   娱乐: 'entertainment',
   购物: 'shopping',
-  医疗: 'other',
-  学习: 'other',
+  医疗: 'medical',
+  学习: 'study',
   其他: 'other',
 };
 
 const CATEGORY_ICON_MAP: Record<string, CategoryIconKey> = {
   'silverware-fork-knife': 'food',
   'food-fork-drink': 'food',
+
   'train-car': 'transport',
-  cellphone: 'transport',
   car: 'transport',
+
+  cellphone: 'communication',
+
   shopping: 'shopping',
   'home-city': 'housing',
+
+  'medical-bag': 'medical',
+  'book-open-page-variant': 'study',
+  airplane: 'travel',
+
   'briefcase-variant': 'salary',
   'account-tie-outline': 'salary',
   'chart-line': 'salary',
+
   'trophy-outline': 'bonus',
+  gift: 'bonus',
   'bank-transfer': 'bonus',
+  cash: 'bonus',
+
   'movie-open-star': 'entertainment',
-  'medical-bag': 'other',
-  'book-open-page-variant': 'other',
-  airplane: 'transport',
+
   shape: 'other',
   'plus-circle-outline': 'other',
 };
+
+function isCategoryIconKey(value: string): value is CategoryIconKey {
+  return value in categoryIconTheme;
+}
 
 export function resolveCategoryIconKey(
   categoryName?: string,
@@ -77,6 +95,10 @@ export function resolveCategoryIconKey(
   }
 
   const normalizedIcon = categoryIcon?.trim();
+  if (normalizedIcon && isCategoryIconKey(normalizedIcon)) {
+    return normalizedIcon;
+  }
+
   if (normalizedIcon && CATEGORY_ICON_MAP[normalizedIcon]) {
     return CATEGORY_ICON_MAP[normalizedIcon];
   }
@@ -94,16 +116,24 @@ function renderCategoryGlyph(
       return <FoodIcon size={iconSize} color={iconColor} />;
     case 'transport':
       return <TransportIcon size={iconSize} color={iconColor} />;
-    case 'bonus':
-      return <BonusIcon size={iconSize} color={iconColor} />;
-    case 'housing':
-      return <HousingIcon size={iconSize} color={iconColor} />;
-    case 'salary':
-      return <SalaryIcon size={iconSize} color={iconColor} />;
-    case 'entertainment':
-      return <EntertainmentIcon size={iconSize} color={iconColor} />;
+    case 'communication':
+      return <CommunicationIcon size={iconSize} color={iconColor} />;
     case 'shopping':
       return <ShoppingIcon size={iconSize} color={iconColor} />;
+    case 'housing':
+      return <HousingIcon size={iconSize} color={iconColor} />;
+    case 'medical':
+      return <MedicalIcon size={iconSize} color={iconColor} />;
+    case 'study':
+      return <StudyIcon size={iconSize} color={iconColor} />;
+    case 'travel':
+      return <TravelIcon size={iconSize} color={iconColor} />;
+    case 'salary':
+      return <SalaryIcon size={iconSize} color={iconColor} />;
+    case 'bonus':
+      return <BonusIcon size={iconSize} color={iconColor} />;
+    case 'entertainment':
+      return <EntertainmentIcon size={iconSize} color={iconColor} />;
     default:
       return <OtherIcon size={iconSize} color={iconColor} />;
   }

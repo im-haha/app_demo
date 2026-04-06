@@ -4,25 +4,25 @@ import {Category} from '@/types/bill';
 const now = dayjs().format('YYYY-MM-DD HH:mm:ss');
 
 const expensePresets = [
-  ['餐饮', 'silverware-fork-knife', '#D97757'],
-  ['交通', 'train-car', '#5C7AEA'],
+  ['餐饮', 'food', '#D97757'],
+  ['交通', 'transport', '#5C7AEA'],
   ['购物', 'shopping', '#D64D7F'],
-  ['住房', 'home-city', '#8C6A5D'],
-  ['通讯', 'cellphone', '#4A6FA5'],
-  ['医疗', 'medical-bag', '#C44536'],
-  ['娱乐', 'movie-open-star', '#7D5BA6'],
-  ['学习', 'book-open-page-variant', '#3C8D5A'],
-  ['旅行', 'airplane', '#1D7874'],
-  ['其他', 'shape', '#6C757D'],
+  ['住房', 'housing', '#8C6A5D'],
+  ['通讯', 'communication', '#4A6FA5'],
+  ['医疗', 'medical', '#C44536'],
+  ['娱乐', 'entertainment', '#7D5BA6'],
+  ['学习', 'study', '#3C8D5A'],
+  ['旅行', 'travel', '#1D7874'],
+  ['其他', 'other', '#6C757D'],
 ] as const;
 
 const incomePresets = [
-  ['工资', 'briefcase-variant', '#1F8A70'],
-  ['奖金', 'trophy-outline', '#E9B949'],
-  ['兼职', 'account-tie-outline', '#4C956C'],
-  ['理财', 'chart-line', '#2A9D8F'],
-  ['转账', 'bank-transfer', '#457B9D'],
-  ['其他', 'plus-circle-outline', '#6C757D'],
+  ['工资', 'salary', '#1F8A70'],
+  ['奖金', 'bonus', '#E9B949'],
+  ['兼职', 'salary', '#4C956C'],
+  ['理财', 'salary', '#2A9D8F'],
+  ['转账', 'bonus', '#457B9D'],
+  ['其他', 'other', '#6C757D'],
 ] as const;
 
 function buildCategory(

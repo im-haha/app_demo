@@ -94,6 +94,115 @@ export function TransportIcon({
   );
 }
 
+export function CommunicationIcon({
+  size = 22,
+  color = '#4A6FA5',
+  strokeWidth = 1.8,
+}: CategoryGlyphProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x="7.4"
+        y="5.2"
+        width="9.2"
+        height="13.6"
+        rx="2.4"
+        stroke={color}
+        strokeWidth={strokeWidth}
+      />
+      <Path
+        d="M10.2 7.8H13.8"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Circle cx="12" cy="16.1" r="0.85" fill={color} />
+    </Svg>
+  );
+}
+
+export function MedicalIcon({
+  size = 22,
+  color = '#C44536',
+  strokeWidth = 1.8,
+}: CategoryGlyphProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7.2 9.1H16.8L16.1 17.2C15.99 18.4 14.98 19.3 13.77 19.3H10.23C9.02 19.3 8.01 18.4 7.9 17.2L7.2 9.1Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M9.4 9.1V7.9C9.4 6.63 10.43 5.6 11.7 5.6H12.3C13.57 5.6 14.6 6.63 14.6 7.9V9.1"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M12 11.4V15.2"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <Path
+        d="M10.1 13.3H13.9"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function StudyIcon({
+  size = 22,
+  color = '#3C8D5A',
+  strokeWidth = 1.8,
+}: CategoryGlyphProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.6 7.4C8 6.4 9.6 6 11.2 6V18C9.6 18 8 18.4 6.6 19.4V7.4Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M17.4 7.4C16 6.4 14.4 6 12.8 6V18C14.4 18 16 18.4 17.4 19.4V7.4Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 7.1V17.2"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function TravelIcon({
+  size = 22,
+  color = '#1D7874',
+  strokeWidth = 1.8,
+}: CategoryGlyphProps): React.JSX.Element {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M18.8 11.2L13.9 12.5L11.4 6.4C11.24 6 10.84 5.76 10.42 5.82C10 5.89 9.67 6.25 9.64 6.67L9.34 11.3L6.2 12.1L4.7 10.9L3.9 11.7L5.2 13.4L4.4 15.8L5.5 16.1L6.7 13.9L9.28 13.2L11 17.8C11.16 18.22 11.57 18.48 12.01 18.42C12.45 18.36 12.79 17.99 12.81 17.55L13 12.7L18.3 11.3"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function BonusIcon({
   size = 22,
   color = '#D8A92E',

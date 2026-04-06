@@ -1,18 +1,20 @@
 import React, {useMemo, useState} from 'react';
-import {Alert, ScrollView, View} from 'react-native';
+import {Alert, Pressable, ScrollView, View} from 'react-native';
 import {
   Button,
   Card,
   Dialog,
-  IconButton,
   Portal,
   RadioButton,
   SegmentedButtons,
   Text,
 } from 'react-native-paper';
 import AppInput from '@/components/common/AppInput';
-import BillCategoryIcon from '@/components/bill/BillCategoryIcon';
+import BillCategoryIcon, {
+  resolveCategoryIconKey,
+} from '@/components/bill/BillCategoryIcon';
 import EmptyState from '@/components/common/EmptyState';
+import {CategoryIconKey} from '@/constants/categoryIconTheme';
 import {useAppStore} from '@/store/appStore';
 import {useAuthStore} from '@/store/authStore';
 import {
@@ -23,17 +25,19 @@ import {
 } from '@/api/category';
 import {useThemeColors} from '@/theme';
 
-const iconOptions = [
-  'silverware-fork-knife',
-  'train-car',
-  'shopping',
-  'home-city',
-  'cellphone',
-  'medical-bag',
-  'movie-open-star',
-  'briefcase-variant',
-  'trophy-outline',
-  'plus-circle-outline',
+const iconOptions: Array<{key: CategoryIconKey; label: string}> = [
+  {key: 'food', label: '餐饮'},
+  {key: 'transport', label: '交通'},
+  {key: 'communication', label: '通讯'},
+  {key: 'shopping', label: '购物'},
+  {key: 'housing', label: '住房'},
+  {key: 'medical', label: '医疗'},
+  {key: 'entertainment', label: '娱乐'},
+  {key: 'study', label: '学习'},
+  {key: 'travel', label: '旅行'},
+  {key: 'salary', label: '收入'},
+  {key: 'bonus', label: '奖金'},
+  {key: 'other', label: '其他'},
 ];
 const colorOptions = ['#D97757', '#1D7874', '#5C7AEA', '#D64D7F', '#2A9D8F', '#6C757D'];
 
@@ -45,7 +49,7 @@ export default function CategoryManageScreen(): React.JSX.Element {
   const [deletingCategoryId, setDeletingCategoryId] = useState<number | null>(null);
   const [replaceTargetCategoryId, setReplaceTargetCategoryId] = useState<number | null>(null);
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState(iconOptions[0]);
+  const [icon, setIcon] = useState<CategoryIconKey>(iconOptions[0].key);
   const [color, setColor] = useState(colorOptions[0]);
   const allCategories = useAppStore(state => state.categories);
   const allBills = useAppStore(state => state.bills);
@@ -66,7 +70,7 @@ export default function CategoryManageScreen(): React.JSX.Element {
   function openCreate() {
     setEditingId(null);
     setName('');
-    setIcon(iconOptions[0]);
+    setIcon(iconOptions[0].key);
     setColor(colorOptions[0]);
     setVisible(true);
   }
@@ -74,7 +78,7 @@ export default function CategoryManageScreen(): React.JSX.Element {
   function openEdit(category: (typeof categories)[number]) {
     setEditingId(category.id);
     setName(category.name);
-    setIcon(category.icon);
+    setIcon(resolveCategoryIconKey(category.name, category.icon));
     setColor(category.color);
     setVisible(true);
   }
@@ -170,23 +174,14 @@ export default function CategoryManageScreen(): React.JSX.Element {
               <Card.Content
                 style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
                 <View style={{flexDirection: 'row', alignItems: 'center', gap: 12}}>
-                  <View
-                    style={{
-                      width: 42,
-                      height: 42,
-                      borderRadius: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: `${category.color}20`,
-                    }}>
-                    <BillCategoryIcon
-                      categoryName={category.name}
-                      categoryIcon={category.icon}
-                      withBadge={false}
-                      iconSize={20}
-                      iconColor={category.color}
-                    />
-                  </View>
+                  <BillCategoryIcon
+                    categoryName={category.name}
+                    categoryIcon={category.icon}
+                    size={42}
+                    iconSize={18}
+                    iconColor={category.color}
+                    bgColor={`${category.color}20`}
+                  />
                   <View>
                     <Text variant="titleMedium">{category.name}</Text>
                     <Text variant="bodySmall" style={{color: colors.muted}}>
@@ -195,15 +190,19 @@ export default function CategoryManageScreen(): React.JSX.Element {
                   </View>
                 </View>
                 {category.isDefault ? null : (
-                  <View style={{flexDirection: 'row'}}>
-                    <IconButton icon="pencil-outline" onPress={() => openEdit(category)} />
-                    <IconButton
-                      icon="delete-outline"
-                      iconColor={colors.danger}
+                  <View style={{flexDirection: 'row', alignItems: 'center', gap: 2}}>
+                    <Button compact onPress={() => openEdit(category)}>
+                      编辑
+                    </Button>
+                    <Button
+                      compact
+                      textColor={colors.danger}
                       onPress={() => {
                         void handleDelete(category.id);
                       }}
-                    />
+                    >
+                      删除
+                    </Button>
                   </View>
                 )}
               </Card.Content>
@@ -221,22 +220,41 @@ export default function CategoryManageScreen(): React.JSX.Element {
             <AppInput label="分类名称" value={name} onChangeText={setName} />
             <View style={{gap: 8}}>
               <Text variant="titleSmall">图标</Text>
-              <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8}}>
-                {iconOptions.map(item => (
-                  <IconButton
-                    key={item}
-                    mode={icon === item ? 'contained' : 'outlined'}
-                    icon={() => (
-                      <BillCategoryIcon
-                        categoryIcon={item}
-                        withBadge={false}
-                        iconSize={18}
-                        iconColor={icon === item ? '#FFFFFF' : colors.primary}
-                      />
-                    )}
-                    onPress={() => setIcon(item)}
-                  />
-                ))}
+              <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 10}}>
+                {iconOptions.map(item => {
+                  const selected = icon === item.key;
+
+                  return (
+                    <Pressable
+                      key={item.key}
+                      onPress={() => setIcon(item.key)}
+                      style={{
+                        width: 92,
+                        borderRadius: 18,
+                        borderWidth: 1,
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? `${colors.primary}14` : colors.surface,
+                        paddingVertical: 10,
+                        paddingHorizontal: 8,
+                      }}>
+                      <View style={{alignItems: 'center', gap: 6}}>
+                        <BillCategoryIcon
+                          categoryIcon={item.key}
+                          size={42}
+                          iconSize={18}
+                        />
+                        <Text
+                          variant="labelMedium"
+                          style={{
+                            color: selected ? colors.primary : colors.text,
+                            fontWeight: selected ? '700' : '500',
+                          }}>
+                          {item.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
             <View style={{gap: 8}}>

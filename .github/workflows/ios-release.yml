@@ -38,6 +38,10 @@ jobs:
             echo "::error::缺少发布标签 tag"
             exit 1
           fi
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag 格式非法: ${TAG}（必须为 vMAJOR.MINOR.PATCH，例如 v1.0.1）"
+            exit 1
+          fi
 
           SAFE_TAG="${TAG//\//-}"
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
@@ -82,7 +86,8 @@ jobs:
       - name: Build iPhone simulator release app
         run: |
           set -eo pipefail
-          xcodebuild \
+          LOG_FILE="${RUNNER_TEMP}/ios-build-iphone.log"
+          if ! SENTRY_DISABLE_AUTO_UPLOAD=true SENTRY_ALLOW_FAILURE=true xcodebuild \
             -workspace account-app-rn/ios/AccountAppShell076.xcworkspace \
             -scheme AccountAppShell076 \
             -configuration Release \
@@ -90,12 +95,18 @@ jobs:
             -derivedDataPath "${RUNNER_TEMP}/ios-iphone" \
             TARGETED_DEVICE_FAMILY=1 \
             clean build \
-            | tee "${RUNNER_TEMP}/ios-build-iphone.log"
+            | tee "${LOG_FILE}"; then
+            echo "::group::iPhone build log tail"
+            tail -n 200 "${LOG_FILE}" || true
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: Build iPad simulator release app
         run: |
           set -eo pipefail
-          xcodebuild \
+          LOG_FILE="${RUNNER_TEMP}/ios-build-ipad.log"
+          if ! SENTRY_DISABLE_AUTO_UPLOAD=true SENTRY_ALLOW_FAILURE=true xcodebuild \
             -workspace account-app-rn/ios/AccountAppShell076.xcworkspace \
             -scheme AccountAppShell076 \
             -configuration Release \
@@ -103,7 +114,12 @@ jobs:
             -derivedDataPath "${RUNNER_TEMP}/ios-ipad" \
             TARGETED_DEVICE_FAMILY=2 \
             clean build \
-            | tee "${RUNNER_TEMP}/ios-build-ipad.log"
+            | tee "${LOG_FILE}"; then
+            echo "::group::iPad build log tail"
+            tail -n 200 "${LOG_FILE}" || true
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: Package iOS simulator artifacts
         id: package

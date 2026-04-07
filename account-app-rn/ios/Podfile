@@ -59,24 +59,22 @@ target 'AccountAppShell076' do
       # :ccache_enabled => true
     )
 
-    folly_source_root = if File.directory?(folly_local)
-      File.join(folly_local, 'folly')
-    else
-      File.join(installer.sandbox.root.to_s, 'RCT-Folly', 'folly')
-    end
-    if Dir.exist?(folly_source_root)
-      sync_targets = [File.join(installer.sandbox.root.to_s, 'RCT-Folly', 'folly')]
+    if File.directory?(folly_local)
+      folly_source_root = File.join(folly_local, 'folly')
+      if Dir.exist?(folly_source_root)
+        sync_targets = [File.join(installer.sandbox.root.to_s, 'RCT-Folly', 'folly')]
 
-      %w[Public Private].each do |visibility|
-        folly_headers_root = File.join(installer.sandbox.root.to_s, 'Headers', visibility, 'RCT-Folly', 'folly')
-        next unless Dir.exist?(folly_headers_root)
-        sync_targets << folly_headers_root
-      end
+        %w[Public Private].each do |visibility|
+          folly_headers_root = File.join(installer.sandbox.root.to_s, 'Headers', visibility, 'RCT-Folly', 'folly')
+          next unless Dir.exist?(folly_headers_root)
+          sync_targets << folly_headers_root
+        end
 
-      sync_targets.each do |target_root|
-        FileUtils.rm_rf(target_root)
-        FileUtils.mkdir_p(target_root)
-        FileUtils.cp_r(Dir.glob(File.join(folly_source_root, '*')), target_root)
+        sync_targets.each do |target_root|
+          FileUtils.rm_rf(target_root)
+          FileUtils.mkdir_p(target_root)
+          FileUtils.cp_r(Dir.glob(File.join(folly_source_root, '*')), target_root)
+        end
       end
     end
   end

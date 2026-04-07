@@ -100,6 +100,19 @@ android {
         versionCode 3
         versionName "1.0.2"
     }
+    flavorDimensions "device"
+    productFlavors {
+        phone {
+            dimension "device"
+            applicationIdSuffix ".phone"
+            versionNameSuffix "-phone"
+        }
+        pad {
+            dimension "device"
+            applicationIdSuffix ".pad"
+            versionNameSuffix "-pad"
+        }
+    }
     bundle {
         abi {
             enableSplit = true

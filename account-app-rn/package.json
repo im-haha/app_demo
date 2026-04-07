@@ -12,9 +12,9 @@
     "typescript": "$typescript"
   },
   "scripts": {
-    "android": "react-native run-android",
-    "android:assemble": "cd android && ./gradlew assembleDebug",
-    "android:release": "cd android && ./gradlew clean assembleRelease",
+    "android": "react-native run-android --mode phoneDebug",
+    "android:assemble": "cd android && ./gradlew assemblePhoneDebug",
+    "android:release": "cd android && ./gradlew clean assemblePhoneRelease assemblePadRelease",
     "ios": "react-native run-ios",
     "ios:sim": "bash ./scripts/run-ios-sim.sh \"iPhone 17\"",
     "ios:pods": "cd ios && bundle exec pod install",
